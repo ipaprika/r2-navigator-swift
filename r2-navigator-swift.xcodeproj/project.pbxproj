@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		1D3A2F56218C85A100108B31 /* PageTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3A2F55218C85A100108B31 /* PageTransition.swift */; };
+		C33F793A2199C5E300123A74 /* R2Shared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C33F79392199C5E300123A74 /* R2Shared.framework */; };
+		C3EB74EE21986A3B008D0242 /* ObjectMapper.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C3EB74ED21986A3B008D0242 /* ObjectMapper.framework */; };
 		F341C2711F506ED5005E6758 /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F341C2701F506ED5005E6758 /* UserSettings.swift */; };
 		F3E7D3D41F4D83B000DF166D /* r2-navigator-swift.h in Headers */ = {isa = PBXBuildFile; fileRef = F3E7D3C61F4D83B000DF166D /* r2-navigator-swift.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		F3E7D3DE1F4D845B00DF166D /* BinaryLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E7D3DD1F4D845B00DF166D /* BinaryLocation.swift */; };
@@ -15,12 +17,13 @@
 		F3E7D3E21F4D84A000DF166D /* NavigatorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E7D3E11F4D84A000DF166D /* NavigatorViewController.swift */; };
 		F3E7D3E41F4D84DC00DF166D /* TriptychView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E7D3E31F4D84DC00DF166D /* TriptychView.swift */; };
 		F3E7D3E61F4D84EF00DF166D /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E7D3E51F4D84EF00DF166D /* WebView.swift */; };
-		F3E7D42A1F4EE07D00DF166D /* R2Shared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F3E7D4291F4EE07D00DF166D /* R2Shared.framework */; };
 		F3E7D42E1F4EE0FE00DF166D /* CbzNavigatorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E7D42D1F4EE0FE00DF166D /* CbzNavigatorViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		1D3A2F55218C85A100108B31 /* PageTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageTransition.swift; sourceTree = "<group>"; };
+		C33F79392199C5E300123A74 /* R2Shared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = R2Shared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C3EB74ED21986A3B008D0242 /* ObjectMapper.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ObjectMapper.framework; path = Carthage/Build/iOS/ObjectMapper.framework; sourceTree = "<group>"; };
 		F341C2701F506ED5005E6758 /* UserSettings.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
 		F3B2C86C1F603E79007601E4 /* SwiftyJSON.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftyJSON.framework; path = Carthage/Build/iOS/SwiftyJSON.framework; sourceTree = "<group>"; };
 		F3E7D3C31F4D83B000DF166D /* R2Navigator.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = R2Navigator.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -42,7 +45,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F3E7D42A1F4EE07D00DF166D /* R2Shared.framework in Frameworks */,
+				C33F793A2199C5E300123A74 /* R2Shared.framework in Frameworks */,
+				C3EB74EE21986A3B008D0242 /* ObjectMapper.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,6 +94,8 @@
 		F3E7D3E71F4DC40800DF166D /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C33F79392199C5E300123A74 /* R2Shared.framework */,
+				C3EB74ED21986A3B008D0242 /* ObjectMapper.framework */,
 				F3B2C86C1F603E79007601E4 /* SwiftyJSON.framework */,
 				F3E7D4291F4EE07D00DF166D /* R2Shared.framework */,
 			);
@@ -140,6 +146,7 @@
 				F3E7D3BF1F4D83B000DF166D /* Frameworks */,
 				F3E7D3C01F4D83B000DF166D /* Headers */,
 				F3E7D3C11F4D83B000DF166D /* Resources */,
+				C3973D4121986DCA007F51BE /* Carthage Run Script */,
 			);
 			buildRules = (
 			);
@@ -193,6 +200,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		C3973D4121986DCA007F51BE /* Carthage Run Script */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Carthage/Build/iOS/ObjectMapper.framework",
+			);
+			name = "Carthage Run Script";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/local/bin/carthage copy-frameworks\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		F3E7D3BE1F4D83B000DF166D /* Sources */ = {
