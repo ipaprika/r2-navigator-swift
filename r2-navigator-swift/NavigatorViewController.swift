@@ -23,6 +23,7 @@ public protocol NavigatorDelegate: class {
     func didChangedPaginatedDocumentPage(currentPage: Int, documentTotalPage: Int)
     func didNavigateViaInternalLinkTap(to documentIndex: Int)
     func didTapExternalUrl(_ : URL)
+    func didCallFromWebTTSEvent(_ event: PaprikaTTSEvent)
 }
 
 public extension NavigatorDelegate {
@@ -238,7 +239,23 @@ extension NavigatorViewController: ViewDelegate {
     internal func handleCenterTap() {
         delegate?.middleTapHandler()
     }
+    
+    func didCallFromWebTTSEvent(_ event: PaprikaTTSEvent) {
+        delegate?.didCallFromWebTTSEvent(event)
+    }
 
+}
+
+extension NavigatorViewController {
+    
+    public func readyToTTS(with isAutoPage: Bool) {
+        (triptychView.currentView as? WebView)?.readyToTTS(with: isAutoPage)
+    }
+    
+    public func executeTTS() {
+        (triptychView.currentView as? WebView)?.executeTTS()
+    }
+    
 }
 
 /// Used to hide conformance to package-private delegate protocols.
