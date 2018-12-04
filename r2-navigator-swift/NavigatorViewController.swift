@@ -23,7 +23,7 @@ public protocol NavigatorDelegate: class {
     func didChangedPaginatedDocumentPage(currentPage: Int, documentTotalPage: Int)
     func didNavigateViaInternalLinkTap(to documentIndex: Int)
     func didTapExternalUrl(_ : URL)
-    func didCallFromWebTTSEvent(_ event: PaprikaTTSEvent)
+    func didCallFromWebTTSEvent(with model: PaprikaTTSModel)
 }
 
 public extension NavigatorDelegate {
@@ -240,8 +240,8 @@ extension NavigatorViewController: ViewDelegate {
         delegate?.middleTapHandler()
     }
     
-    func didCallFromWebTTSEvent(_ event: PaprikaTTSEvent) {
-        delegate?.didCallFromWebTTSEvent(event)
+    func didCallFromWebTTSEvent(with model: PaprikaTTSModel) {
+        delegate?.didCallFromWebTTSEvent(with: model)
     }
 
 }

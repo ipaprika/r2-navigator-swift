@@ -23,7 +23,7 @@ protocol ViewDelegate: class {
     func handleTapOnLink(with url: URL)
     func handleTapOnInternalLink(with href: String)
     func documentPageDidChanged(webview: WebView, currentPage: Int ,totalPage: Int)
-    func didCallFromWebTTSEvent(_ event: PaprikaTTSEvent)
+    func didCallFromWebTTSEvent(with model: PaprikaTTSModel)
 }
 
 final class WebView: WKWebView {
@@ -277,6 +277,8 @@ extension WebView {
         
         if originPage != currentPage {
             if let pages = totalPages {
+                stopTTS()
+                viewDelegate?.didCallFromWebTTSEvent(with: PaprikaTTSModel(event: .finish))
                 viewDelegate?.documentPageDidChanged(webview: self, currentPage: currentPage, totalPage: pages)
             }
         }
@@ -311,6 +313,20 @@ extension WebView {
         executeTTSModel()
     }
     
+    public func stopTTS() {
+        evaluateJavaScript("call_from_native_reset();") { [weak self] (_, _) in
+            self?.ttsModel?.stop()
+            self?.ttsModel = nil
+        }
+    }
+    
+    public func moveToNextPage() {
+        evaluateJavaScript("call_from_native_next_page();") { [weak self] (_, _) in
+            self?.ttsModel?.stop()
+            self?.ttsModel = nil
+        }
+    }
+    
     private func executeTTSModel() {
         guard let model = ttsModel else {
             return
@@ -326,20 +342,18 @@ extension WebView {
             return
         }
         
+        ttsModel = model
+        
         switch model.event {
-        case .ready:
-            ttsModel = model
         case .current:
-            ttsModel = model
             ttsModel?.execute(with: { [weak self] in
                 self?.evaluateJavaScript("call_from_native_current_tts_finished(\(model.index));", completionHandler: nil)
             })
-        case .finish:
-            ttsModel = nil
-            print("finish : \(model)")
+        default:
+            break
         }
         
-        viewDelegate?.didCallFromWebTTSEvent(model.event)
+        viewDelegate?.didCallFromWebTTSEvent(with: model)
     }
     
 }

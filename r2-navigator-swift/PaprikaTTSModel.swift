@@ -18,9 +18,10 @@ public enum PaprikaTTSEvent: String {
 
 public class PaprikaTTSModel: NSObject, ImmutableMappable {
     
-    let event: PaprikaTTSEvent
-    let index: Int
-    let text: String?
+    public let event: PaprikaTTSEvent
+    public let index: Int
+    public let text: String?
+    public let isAutoPage: Bool
     
     typealias TTSFinishedHandler = () -> Void
     private var onFinishedHandler: TTSFinishedHandler?
@@ -35,6 +36,7 @@ public class PaprikaTTSModel: NSObject, ImmutableMappable {
         event = try map.value("event", using: EnumTransform<PaprikaTTSEvent>())
         index = try map.value("index")
         text = try? map.value("text")
+        isAutoPage = (try? map.value("auto")) ?? false
     }
     
     // Ready 상태의 init
@@ -42,12 +44,28 @@ public class PaprikaTTSModel: NSObject, ImmutableMappable {
         event = .ready
         index = 0
         text = nil
+        isAutoPage = false
+        super.init()
+    }
+    
+    init(event: PaprikaTTSEvent) {
+        self.event = event
+        index = 0
+        text = nil
+        isAutoPage = false
         super.init()
     }
     
 }
 
 extension PaprikaTTSModel: AVSpeechSynthesizerDelegate {
+    
+    func stop() {
+        guard speechSynthesizer.isSpeaking else {
+            return
+        }
+        speechSynthesizer.stopSpeaking(at: .immediate)
+    }
     
     func execute(with completion: @escaping TTSFinishedHandler) {
         guard let text = text else {
