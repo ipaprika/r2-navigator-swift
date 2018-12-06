@@ -12,6 +12,7 @@
 import WebKit
 
 import R2Shared
+import ObjectMapper
 
 protocol ViewDelegate: class {
     func displayRightDocument()
@@ -22,6 +23,7 @@ protocol ViewDelegate: class {
     func handleTapOnLink(with url: URL)
     func handleTapOnInternalLink(with href: String)
     func documentPageDidChanged(webview: WebView, currentPage: Int ,totalPage: Int)
+    func didCallFromWebTTSEvent(with model: PaprikaTTSModel)
 }
 
 final class WebView: WKWebView {
@@ -45,6 +47,7 @@ final class WebView: WKWebView {
     }
     
     internal var userSettings: UserSettings?
+    private var ttsModel: PaprikaTTSModel?
 
     public var documentLoaded = false
 
@@ -56,6 +59,7 @@ final class WebView: WKWebView {
                     "rightTap": rightTapped,
                     "didLoad": documentDidLoad,
                     "updateProgression": progressionDidChange]
+    let ttsHandlerEventName = "ttsHandler"
     
     let jsFollowUp = ["leftTap": dismissIfNeed,
                     "centerTap": dismissIfNeed,
@@ -273,11 +277,13 @@ extension WebView {
         
         if originPage != currentPage {
             if let pages = totalPages {
+                stopTTS()
+                viewDelegate?.didCallFromWebTTSEvent(with: PaprikaTTSModel(event: .finish))
                 viewDelegate?.documentPageDidChanged(webview: self, currentPage: currentPage, totalPage: pages)
             }
         }
     }
-
+    
     /// Update webview style to userSettings.
     internal func applyUserSettingsStyle() {
         guard let userSettings = userSettings else {
@@ -293,6 +299,63 @@ extension WebView {
     }
 }
 
+extension WebView {
+    
+    public func readyToTTS(with isAutoPage: Bool) {
+        evaluateJavaScript("tts_ready(\(isAutoPage));", completionHandler: nil)
+    }
+    
+    public func executeTTS() {
+        if ttsModel == nil {
+            ttsModel = PaprikaTTSModel()
+        }
+        
+        executeTTSModel()
+    }
+    
+    public func stopTTS() {
+        evaluateJavaScript("call_from_native_reset();") { [weak self] (_, _) in
+            self?.ttsModel?.stop()
+            self?.ttsModel = nil
+        }
+    }
+    
+    public func moveToNextPage() {
+        evaluateJavaScript("call_from_native_next_page();") { [weak self] (_, _) in
+            self?.ttsModel?.stop()
+            self?.ttsModel = nil
+        }
+    }
+    
+    private func executeTTSModel() {
+        guard let model = ttsModel else {
+            return
+        }
+        
+        evaluateJavaScript("call_from_native_start(\(model.index));", completionHandler: nil)
+    }
+    
+    internal func onTTSHandler(json: [String: Any]) {
+        guard let model = try? Mapper<PaprikaTTSModel>().map(JSON: json) else {
+            return
+        }
+        
+        ttsModel = model
+        
+        switch model.event {
+        case .current:
+            ttsModel?.execute(with: { [weak self] in
+                self?.evaluateJavaScript("call_from_native_current_tts_finished(\(model.index));", completionHandler: nil)
+            })
+        default:
+            break
+        }
+        
+        viewDelegate?.didCallFromWebTTSEvent(with: model)
+    }
+    
+}
+
 // MARK: - WKScriptMessageHandler for handling incoming message from the Bridge.js
 // javascript code.
 extension WebView: WKScriptMessageHandler {
@@ -300,14 +363,15 @@ extension WebView: WKScriptMessageHandler {
     // Handles incoming calls from JS.
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage) {
-        guard let body = message.body as? String else {
-            return
-        }
-        if let handler = jsEvents[message.name] {
-            handler(self)(body)
-        }
-        if let followup = jsFollowUp[message.name] {
-            followup(self)()
+        if let stringValue = message.body as? String {
+            if let handler = jsEvents[message.name] {
+                handler(self)(stringValue)
+            }
+            if let followup = jsFollowUp[message.name] {
+                followup(self)()
+            }
+        } else if let infoValue = message.body as? [String: Any], message.name == ttsHandlerEventName {
+            onTTSHandler(json: infoValue)
         }
     }
 
@@ -318,6 +382,7 @@ extension WebView: WKScriptMessageHandler {
         for eventName in jsEvents.keys {
             configuration.userContentController.add(self, name: eventName)
         }
+        configuration.userContentController.add(self, name: ttsHandlerEventName)
         hasLoadedJsEvents = true
     }
 
@@ -326,6 +391,7 @@ extension WebView: WKScriptMessageHandler {
         for eventName in jsEvents.keys {
             configuration.userContentController.removeScriptMessageHandler(forName: eventName)
         }
+        configuration.userContentController.removeScriptMessageHandler(forName: ttsHandlerEventName)
         hasLoadedJsEvents = false
     }
 }
