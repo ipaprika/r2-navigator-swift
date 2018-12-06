@@ -332,9 +332,7 @@ extension WebView {
             return
         }
         
-        model.execute(with: { [weak self] in
-            self?.evaluateJavaScript("call_from_native_current_tts_finished(\(model.index));", completionHandler: nil)
-        })
+        evaluateJavaScript("call_from_native_start(\(model.index));", completionHandler: nil)
     }
     
     internal func onTTSHandler(json: [String: Any]) {

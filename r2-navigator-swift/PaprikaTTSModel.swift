@@ -14,6 +14,7 @@ public enum PaprikaTTSEvent: String {
     case ready
     case current
     case finish
+    case last
 }
 
 public class PaprikaTTSModel: NSObject, ImmutableMappable {
@@ -34,7 +35,7 @@ public class PaprikaTTSModel: NSObject, ImmutableMappable {
     
     required public init(map: Map) throws {
         event = try map.value("event", using: EnumTransform<PaprikaTTSEvent>())
-        index = try map.value("index")
+        index = (try? map.value("index")) ?? 0
         text = try? map.value("text")
         isAutoPage = (try? map.value("auto")) ?? false
     }

@@ -256,6 +256,10 @@ extension NavigatorViewController {
         (triptychView.currentView as? WebView)?.executeTTS()
     }
     
+    public func stopTTS() {
+        (triptychView.currentView as? WebView)?.stopTTS()
+    }
+    
 }
 
 /// Used to hide conformance to package-private delegate protocols.
