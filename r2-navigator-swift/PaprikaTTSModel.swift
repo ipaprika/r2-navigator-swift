@@ -19,6 +19,8 @@ public enum PaprikaTTSEvent: String {
 
 public class PaprikaTTSModel: NSObject, ImmutableMappable {
     
+    public static var language: String = "en-US"
+    
     public let event: PaprikaTTSEvent
     public let index: Int
     public let text: String?
@@ -91,7 +93,7 @@ fileprivate extension String {
     
     var utterance: AVSpeechUtterance {
         let utterance = AVSpeechUtterance(string: self)
-//        utterance.voice = AVSpeechSynthesisVoice(language: "ko-KR")
+        utterance.voice = AVSpeechSynthesisVoice(language: PaprikaTTSModel.language)
         return utterance
     }
     
