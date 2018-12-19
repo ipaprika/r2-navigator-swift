@@ -23,7 +23,7 @@ protocol ViewDelegate: class {
     func handleTapOnLink(with url: URL)
     func handleTapOnInternalLink(with href: String)
     func documentPageDidChanged(webview: WebView, currentPage: Int ,totalPage: Int)
-    func didCallFromWebTTSEvent(with model: PaprikaTTSModel)
+    func didCallFromWebTTSEvent(with model: TTSBridgeModel)
 }
 
 final class WebView: WKWebView {
@@ -47,7 +47,7 @@ final class WebView: WKWebView {
     }
     
     internal var userSettings: UserSettings?
-    private var ttsModel: PaprikaTTSModel?
+    private var ttsModel: TTSBridgeModel?
 
     public var documentLoaded = false
 
@@ -277,8 +277,7 @@ extension WebView {
         
         if originPage != currentPage {
             if let pages = totalPages {
-                stopTTS()
-                viewDelegate?.didCallFromWebTTSEvent(with: PaprikaTTSModel(event: .finish))
+                viewDelegate?.didCallFromWebTTSEvent(with: TTSBridgeModel(event: .finish))
                 viewDelegate?.documentPageDidChanged(webview: self, currentPage: currentPage, totalPage: pages)
             }
         }
@@ -301,54 +300,39 @@ extension WebView {
 
 extension WebView {
     
-    public func readyToTTS(with isAutoPage: Bool) {
-        evaluateJavaScript("tts_ready(\(isAutoPage));", completionHandler: nil)
+    public func readyToTTS(with isAutoPage: Bool, completion: TTSBridgeModelDefaultHandler?) {
+        evaluateJavaScript("tts_ready(\(isAutoPage));", completionHandler: { (_, _) in
+            completion?()
+        })
     }
     
-    public func executeTTS() {
-        if ttsModel == nil {
-            ttsModel = PaprikaTTSModel()
-        }
-        
-        executeTTSModel()
+    public func executeTTS(index: Int, completion: TTSBridgeModelDefaultHandler?) {
+        evaluateJavaScript("call_from_native_start(\(index));", completionHandler: { (_, _) in
+            completion?()
+        })
     }
     
-    public func stopTTS() {
-        evaluateJavaScript("call_from_native_reset();") { [weak self] (_, _) in
-            self?.ttsModel?.stop()
-            self?.ttsModel = nil
-        }
-    }
-    
-    public func moveToNextPage() {
-        evaluateJavaScript("call_from_native_next_page();") { [weak self] (_, _) in
-            self?.ttsModel?.stop()
-            self?.ttsModel = nil
+    public func stopTTS(completion: TTSBridgeModelDefaultHandler?) {
+        evaluateJavaScript("call_from_native_reset();") { (_, _) in
+            completion?()
         }
     }
     
-    private func executeTTSModel() {
-        guard let model = ttsModel else {
-            return
+    public func speechFinished(index: Int, completion: TTSBridgeModelDefaultHandler?) {
+        evaluateJavaScript("call_from_native_current_tts_finished(\(index));", completionHandler: { (_, _) in
+            completion?()
+        })
+    }
+    
+    public func moveToNextPage(completion: TTSBridgeModelDefaultHandler?) {
+        evaluateJavaScript("call_from_native_next_page();") { (_, _) in
+            completion?()
         }
-        
-        evaluateJavaScript("call_from_native_start(\(model.index));", completionHandler: nil)
     }
     
     internal func onTTSHandler(json: [String: Any]) {
-        guard let model = try? Mapper<PaprikaTTSModel>().map(JSON: json) else {
+        guard let model = try? Mapper<TTSBridgeModel>().map(JSON: json) else {
             return
-        }
-        
-        ttsModel = model
-        
-        switch model.event {
-        case .current:
-            ttsModel?.execute(with: { [weak self] in
-                self?.evaluateJavaScript("call_from_native_current_tts_finished(\(model.index));", completionHandler: nil)
-            })
-        default:
-            break
         }
         
         viewDelegate?.didCallFromWebTTSEvent(with: model)
