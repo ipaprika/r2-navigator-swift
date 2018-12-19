@@ -23,7 +23,7 @@ public protocol NavigatorDelegate: class {
     func didChangedPaginatedDocumentPage(currentPage: Int, documentTotalPage: Int)
     func didNavigateViaInternalLinkTap(to documentIndex: Int)
     func didTapExternalUrl(_ : URL)
-    func didCallFromWebTTSEvent(with model: PaprikaTTSModel)
+    func didCallFromWebTTSEvent(with model: TTSBridgeModel)
 }
 
 public extension NavigatorDelegate {
@@ -240,7 +240,7 @@ extension NavigatorViewController: ViewDelegate {
         delegate?.middleTapHandler()
     }
     
-    func didCallFromWebTTSEvent(with model: PaprikaTTSModel) {
+    func didCallFromWebTTSEvent(with model: TTSBridgeModel) {
         delegate?.didCallFromWebTTSEvent(with: model)
     }
 
@@ -248,16 +248,20 @@ extension NavigatorViewController: ViewDelegate {
 
 extension NavigatorViewController {
     
-    public func readyToTTS(with isAutoPage: Bool) {
-        (triptychView.currentView as? WebView)?.readyToTTS(with: isAutoPage)
+    public func readyToTTS(with isAutoPage: Bool, completion: TTSBridgeModelDefaultHandler?) {
+        (triptychView.currentView as? WebView)?.readyToTTS(with: isAutoPage, completion: completion)
     }
     
-    public func executeTTS() {
-        (triptychView.currentView as? WebView)?.executeTTS()
+    public func executeTTS(index: Int, completion: TTSBridgeModelDefaultHandler?) {
+        (triptychView.currentView as? WebView)?.executeTTS(index: index, completion: completion)
     }
     
-    public func stopTTS() {
-        (triptychView.currentView as? WebView)?.stopTTS()
+    public func stopTTS(completion: TTSBridgeModelDefaultHandler?) {
+        (triptychView.currentView as? WebView)?.stopTTS(completion: completion)
+    }
+    
+    public func speechFinished(index: Int, completion: TTSBridgeModelDefaultHandler?) {
+        (triptychView.currentView as? WebView)?.speechFinished(index: index, completion: completion)
     }
     
 }
