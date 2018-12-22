@@ -252,16 +252,16 @@ extension NavigatorViewController {
         (triptychView.currentView as? WebView)?.readyToTTS(with: isAutoPage, completion: completion)
     }
     
+    public func startTTS(index: Int = 0, completion: TTSBridgeModelDefaultHandler? = nil) {
+        (triptychView.currentView as? WebView)?.startTTS(index: index, completion: completion)
+    }
+    
     public func executeTTS(index: Int, completion: TTSBridgeModelDefaultHandler?) {
         (triptychView.currentView as? WebView)?.executeTTS(index: index, completion: completion)
     }
     
     public func stopTTS(completion: TTSBridgeModelDefaultHandler?) {
         (triptychView.currentView as? WebView)?.stopTTS(completion: completion)
-    }
-    
-    public func speechFinished(index: Int, completion: TTSBridgeModelDefaultHandler?) {
-        (triptychView.currentView as? WebView)?.speechFinished(index: index, completion: completion)
     }
     
 }

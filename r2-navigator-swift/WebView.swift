@@ -306,7 +306,7 @@ extension WebView {
         })
     }
     
-    public func executeTTS(index: Int, completion: TTSBridgeModelDefaultHandler?) {
+    public func startTTS(index: Int = 0, completion: TTSBridgeModelDefaultHandler? = nil) {
         evaluateJavaScript("call_from_native_start(\(index));", completionHandler: { (_, _) in
             completion?()
         })
@@ -318,10 +318,10 @@ extension WebView {
         }
     }
     
-    public func speechFinished(index: Int, completion: TTSBridgeModelDefaultHandler?) {
-        evaluateJavaScript("call_from_native_current_tts_finished(\(index));", completionHandler: { (_, _) in
+    public func executeTTS(index: Int, completion: TTSBridgeModelDefaultHandler?) {
+        evaluateJavaScript("call_from_native_tts_page(\(index));") { (_, _) in
             completion?()
-        })
+        }
     }
     
     public func moveToNextPage(completion: TTSBridgeModelDefaultHandler?) {
