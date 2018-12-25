@@ -248,20 +248,38 @@ extension NavigatorViewController: ViewDelegate {
 
 extension NavigatorViewController {
     
-    public func readyToTTS(with isAutoPage: Bool, completion: TTSBridgeModelDefaultHandler?) {
-        (triptychView.currentView as? WebView)?.readyToTTS(with: isAutoPage, completion: completion)
+    public func isReadyToTTS(completion: ((Bool) -> Void)?) {
+        (triptychView.currentView as? WebView)?.evaluateJavaScript("tts_result_json;") { (result, error) in
+            guard let _ = result as? [Any] else {
+                completion?(false)
+                return
+            }
+            completion?(true)
+        }
     }
     
-    public func startTTS(index: Int = 0, completion: TTSBridgeModelDefaultHandler? = nil) {
-        (triptychView.currentView as? WebView)?.startTTS(index: index, completion: completion)
+    public func readyToTTS(with isAutoPage: Bool, completion: TTSBridgeModelDefaultHandler?) {
+        (triptychView.currentView as? WebView)?.evaluateJavaScript("tts_ready(\(isAutoPage));", completionHandler: { (_, _) in
+            completion?()
+        })
     }
     
     public func executeTTS(index: Int, completion: TTSBridgeModelDefaultHandler?) {
-        (triptychView.currentView as? WebView)?.executeTTS(index: index, completion: completion)
+        (triptychView.currentView as? WebView)?.evaluateJavaScript("call_from_native_tts_page(\(index));", completionHandler: { (_, _) in
+            completion?()
+        })
     }
     
     public func stopTTS(completion: TTSBridgeModelDefaultHandler?) {
-        (triptychView.currentView as? WebView)?.stopTTS(completion: completion)
+        (triptychView.currentView as? WebView)?.evaluateJavaScript("call_from_native_reset();") { (_, _) in
+            completion?()
+        }
+    }
+    
+    public func removeAllHighlight(completion: TTSBridgeModelDefaultHandler?) {
+        (triptychView.currentView as? WebView)?.evaluateJavaScript("ADDON_IPAPRIKA.JS.remove_TTS_All_Highlight();") { (_, _) in
+            completion?()
+        }
     }
     
 }

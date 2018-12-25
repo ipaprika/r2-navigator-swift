@@ -59,7 +59,9 @@ final class WebView: WKWebView {
                     "rightTap": rightTapped,
                     "didLoad": documentDidLoad,
                     "updateProgression": progressionDidChange]
+    
     let ttsHandlerEventName = "ttsHandler"
+    let ttsLogEventName = "ttsLog"
     
     let jsFollowUp = ["leftTap": dismissIfNeed,
                     "centerTap": dismissIfNeed,
@@ -277,7 +279,6 @@ extension WebView {
         
         if originPage != currentPage {
             if let pages = totalPages {
-                viewDelegate?.didCallFromWebTTSEvent(with: TTSBridgeModel(event: .finish))
                 viewDelegate?.documentPageDidChanged(webview: self, currentPage: currentPage, totalPage: pages)
             }
         }
@@ -300,36 +301,6 @@ extension WebView {
 
 extension WebView {
     
-    public func readyToTTS(with isAutoPage: Bool, completion: TTSBridgeModelDefaultHandler?) {
-        evaluateJavaScript("tts_ready(\(isAutoPage));", completionHandler: { (_, _) in
-            completion?()
-        })
-    }
-    
-    public func startTTS(index: Int = 0, completion: TTSBridgeModelDefaultHandler? = nil) {
-        evaluateJavaScript("call_from_native_start(\(index));", completionHandler: { (_, _) in
-            completion?()
-        })
-    }
-    
-    public func stopTTS(completion: TTSBridgeModelDefaultHandler?) {
-        evaluateJavaScript("call_from_native_reset();") { (_, _) in
-            completion?()
-        }
-    }
-    
-    public func executeTTS(index: Int, completion: TTSBridgeModelDefaultHandler?) {
-        evaluateJavaScript("call_from_native_tts_page(\(index));") { (_, _) in
-            completion?()
-        }
-    }
-    
-    public func moveToNextPage(completion: TTSBridgeModelDefaultHandler?) {
-        evaluateJavaScript("call_from_native_next_page();") { (_, _) in
-            completion?()
-        }
-    }
-    
     internal func onTTSHandler(json: [String: Any]) {
         guard let model = try? Mapper<TTSBridgeModel>().map(JSON: json) else {
             return
@@ -347,15 +318,15 @@ extension WebView: WKScriptMessageHandler {
     // Handles incoming calls from JS.
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage) {
-        if let stringValue = message.body as? String {
-            if let handler = jsEvents[message.name] {
-                handler(self)(stringValue)
-            }
-            if let followup = jsFollowUp[message.name] {
-                followup(self)()
-            }
+        if let handler = jsEvents[message.name],
+            let value = message.body as? String {
+            handler(self)(value)
+        } else if let followup = jsFollowUp[message.name] {
+            followup(self)()
         } else if let infoValue = message.body as? [String: Any], message.name == ttsHandlerEventName {
             onTTSHandler(json: infoValue)
+        } else if let value = message.body as? String, message.name == ttsLogEventName {
+            print("TTS.log : \(value)")
         }
     }
 
@@ -367,6 +338,7 @@ extension WebView: WKScriptMessageHandler {
             configuration.userContentController.add(self, name: eventName)
         }
         configuration.userContentController.add(self, name: ttsHandlerEventName)
+        configuration.userContentController.add(self, name: ttsLogEventName)
         hasLoadedJsEvents = true
     }
 
@@ -376,6 +348,7 @@ extension WebView: WKScriptMessageHandler {
             configuration.userContentController.removeScriptMessageHandler(forName: eventName)
         }
         configuration.userContentController.removeScriptMessageHandler(forName: ttsHandlerEventName)
+        configuration.userContentController.removeScriptMessageHandler(forName: ttsLogEventName)
         hasLoadedJsEvents = false
     }
 }
