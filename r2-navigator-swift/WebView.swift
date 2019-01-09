@@ -306,7 +306,9 @@ extension WebView {
             return
         }
         
-        viewDelegate?.didCallFromWebTTSEvent(with: model)
+        DispatchQueue.main.async { [weak self] in
+            self?.viewDelegate?.didCallFromWebTTSEvent(with: model)
+        }
     }
     
 }
