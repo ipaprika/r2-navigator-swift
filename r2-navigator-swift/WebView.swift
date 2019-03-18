@@ -15,6 +15,8 @@ import R2Shared
 import ObjectMapper
 
 protocol ViewDelegate: class {
+    func willAnimatePageChange()
+    func didEndPageAnimation()
     func displayRightDocument()
     func displayLeftDocument()
     func handleCenterTap()
@@ -24,6 +26,10 @@ protocol ViewDelegate: class {
     func handleTapOnInternalLink(with href: String)
     func documentPageDidChanged(webview: WebView, currentPage: Int ,totalPage: Int)
     func didCallFromWebTTSEvent(with model: TTSBridgeModel)
+    
+    /// Returns whether the web view is allowed to copy the text selection to the pasteboard.
+    func requestCopySelection() -> Bool
+    func didCopySelection()
 }
 
 final class WebView: WKWebView {
@@ -31,9 +37,12 @@ final class WebView: WKWebView {
     public weak var viewDelegate: ViewDelegate?
     fileprivate let initialLocation: BinaryLocation
     
-    var direction: PageProgressionDirection?
+    var readingProgression: ReadingProgression?
 
     var pageTransition: PageTransition
+    var editingActions: [EditingAction]
+    
+    weak var activityIndicatorView: UIActivityIndicatorView?
 
     public var initialId: String?
     // progression and totalPages only work on 'readium-scroll-off' mode
@@ -46,8 +55,13 @@ final class WebView: WKWebView {
         return Int(progression! * Double(totalPages!)) + 1
     }
     
-    internal var userSettings: UserSettings?
     private var ttsModel: TTSBridgeModel?
+    internal var userSettings: UserSettings? {
+        didSet {
+            guard let userSettings = userSettings else { return }
+            updateActivityIndicator(for: userSettings)
+        }
+    }
 
     public var documentLoaded = false
 
@@ -81,7 +95,7 @@ final class WebView: WKWebView {
         }
         
         private func evaluateJavascriptForScroll(on target: WebView) {
-            let dir = target.direction?.rawValue ?? PageProgressionDirection.ltr.rawValue
+            let dir = target.readingProgression?.rawValue ?? ReadingProgression.ltr.rawValue
             
             switch self {
             case .left:
@@ -105,11 +119,13 @@ final class WebView: WKWebView {
             case .left:
                 let isAtFirstPageInDocument = scrollView.contentOffset.x == 0
                 if !isAtFirstPageInDocument {
+                    target.viewDelegate?.willAnimatePageChange()
                     return scrollView.scrollToPreviousPage()
                 }
             case .right:
                 let isAtLastPageInDocument = scrollView.contentOffset.x == scrollView.contentSize.width - scrollView.frame.size.width
                 if !isAtLastPageInDocument {
+                    target.viewDelegate?.willAnimatePageChange()
                     return scrollView.scrollToNextPage()
                 }
             }
@@ -118,12 +134,16 @@ final class WebView: WKWebView {
     }
     
     var sizeObservation: NSKeyValueObservation?
+    
+    private var shouldNotifyCopySelection = false
 
-    init(frame: CGRect, initialLocation: BinaryLocation, pageTransition: PageTransition = .none) {
+    init(frame: CGRect, initialLocation: BinaryLocation, pageTransition: PageTransition = .none, disableDragAndDrop: Bool = false, editingActions: [EditingAction] = []) {
         self.initialLocation = initialLocation
         self.pageTransition = pageTransition
+        self.editingActions = editingActions
+      
         super.init(frame: frame, configuration: .init())
-
+        if disableDragAndDrop { disableDragAndDropInteraction() }
         isOpaque = false
         backgroundColor = UIColor.clear
         scrollView.backgroundColor = UIColor.clear
@@ -132,6 +152,10 @@ final class WebView: WKWebView {
         scrollView.isPagingEnabled = true
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
+        if #available(iOS 11.0, *) {
+            // Prevents the pages from jumping down when the status bar is toggled
+            scrollView.contentInsetAdjustmentBehavior = .never
+        }
         navigationDelegate = self
         uiDelegate = self
         
@@ -148,12 +172,18 @@ final class WebView: WKWebView {
             }
         }
         
-        self.alpha = 0
+        scrollView.alpha = 0
+        
+      NotificationCenter.default.addObserver(self, selector: #selector(pasteboardDidChange), name: UIPasteboard.changedNotification, object: nil)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func didMoveToSuperview() {
@@ -165,6 +195,32 @@ final class WebView: WKWebView {
             scrollView.delegate = self
         }
     }
+  
+    public override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        for editingAction in self.editingActions {
+            if action == Selector(editingAction.rawValue) {
+                return true
+            }
+        }
+        return false
+    }
+    
+    @objc private func pasteboardDidChange() {
+        if shouldNotifyCopySelection {
+            shouldNotifyCopySelection = false
+            viewDelegate?.didCopySelection()
+        }
+    }
+    
+    override func copy(_ sender: Any?) {
+        guard viewDelegate?.requestCopySelection() ?? true else {
+            return
+        }
+        // We rely on UIPasteboardChanged to notify the copy to the delegate because the WKWebView sets the selection in the UIPasteboard asynchronously
+        shouldNotifyCopySelection = true
+        super.copy(sender)
+    }
+
 }
 
 extension WebView {
@@ -215,7 +271,8 @@ extension WebView {
         
         switch pageTransition {
         case .none:
-            alpha = 1
+            scrollView.alpha = 1
+            activityIndicatorView?.stopAnimating()
         case .animated:
             fadeInWithDelay()
         }
@@ -230,7 +287,7 @@ extension WebView {
     internal func scrollAt(position: Double) {
         guard position >= 0 && position <= 1 else { return }
         
-        let dir = self.direction?.rawValue ?? PageProgressionDirection.ltr.rawValue
+        let dir = self.readingProgression?.rawValue ?? ReadingProgression.ltr.rawValue
 
         self.evaluateJavaScript("scrollToPosition(\'\(position)\', \'\(dir)\')",
             completionHandler: nil)
@@ -397,6 +454,15 @@ extension WebView: UIScrollViewDelegate {
     
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         scrollView.isUserInteractionEnabled = true
+        viewDelegate?.didEndPageAnimation()
+    }
+    
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        viewDelegate?.didEndPageAnimation()
+    }
+    
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        viewDelegate?.didEndPageAnimation()
     }
 }
 
@@ -437,15 +503,50 @@ private extension UIScrollView {
     }
 }
 
-private extension UIView {
+private extension WebView {
     
     func fadeInWithDelay() {
         //TODO: We need to give the CSS and webview time to layout correctly. 0.2 seconds seems like a good value for it to work on an iPhone 5s. Look into solving this better
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.activityIndicatorView?.stopAnimating()
             UIView.animate(withDuration: 0.3, animations: {
-                self.alpha = 1
+                self.scrollView.alpha = 1
             })
         }
     }
+    
+    func updateActivityIndicator(for userSettings: UserSettings) {
+        guard let appearance = userSettings.userProperties.getProperty(reference: ReadiumCSSReference.appearance.rawValue) as? Enumerable else { return }
+        guard appearance.values.count > appearance.index else { return }
+        let value = appearance.values[appearance.index]
+        switch value {
+        case "readium-night-on":
+            createActivityIndicator(style: .white)
+        default:
+            createActivityIndicator(style: .gray)
+        }
+    }
+    
+    func createActivityIndicator(style: UIActivityIndicatorView.Style) {
+        if pageTransition == .none { return }
+        if documentLoaded { return }
+      if activityIndicatorView?.style == style { return }
+        activityIndicatorView?.removeFromSuperview()
+      let view = UIActivityIndicatorView(style: style)
+        view.translatesAutoresizingMaskIntoConstraints = false
+        self.addSubview(view)
+        view.centerXAnchor.constraint(equalTo: self.centerXAnchor).isActive = true
+        view.centerYAnchor.constraint(equalTo: self.centerYAnchor).isActive = true
+        view.startAnimating()
+        activityIndicatorView = view
+    }
+    
+    func disableDragAndDropInteraction() {
+        if #available(iOS 11.0, *) {
+            guard let webScrollView = subviews.compactMap( { $0 as? UIScrollView }).first,
+                let contentView = webScrollView.subviews.first(where: { $0.interactions.count > 1 }),
+                let dragInteraction = contentView.interactions.compactMap({ $0 as? UIDragInteraction }).first else { return }
+            contentView.removeInteraction(dragInteraction)
+        }
+    }
 }
-

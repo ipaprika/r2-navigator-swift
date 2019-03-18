@@ -1,5 +1,5 @@
 //
-//  NavigatorViewController.swift
+//  EPUBNavigatorViewController.swift
 //  r2-navigator-swift
 //
 //  Created by Winnie Quinn, Alexandre Camilleri on 8/23/17.
@@ -14,7 +14,14 @@ import R2Shared
 import WebKit
 import SafariServices
 
-public protocol NavigatorDelegate: class {
+
+public enum NavigatorError: Error {
+    /// The user tried to copy the text selection but the DRM License doesn't allow it.
+    case copyForbidden
+}
+
+
+public protocol EPUBNavigatorDelegate: class {
     func middleTapHandler()
     func willExitPublication(documentIndex: Int, progression: Double?)
     /// invoked when publication's content change to another page of 'document', slide to next chapter for example
@@ -24,63 +31,75 @@ public protocol NavigatorDelegate: class {
     func didNavigateViaInternalLinkTap(to documentIndex: Int)
     func didTapExternalUrl(_ : URL)
     func didCallFromWebTTSEvent(with model: TTSBridgeModel)
+
+    /// Displays an error message to the user.
+    func presentError(_ error: NavigatorError)
 }
 
-public extension NavigatorDelegate {
-  func didChangedDocumentPage(currentDocumentIndex: Int) {
-    // optional
-  }
-  
-  func didChangedPaginatedDocumentPage(currentPage: Int, documentTotalPage: Int) {
-    // optional
-  }
-  func didNavigateViaInternalLinkTap(to documentIndex: Int) {
-    // optional
-  }
-
-  func didTapExternalUrl(_ url: URL) {
-    // optional
-    // TODO following lines have been moved from the original implementation and might need to be revisited at some point
-    let view = SFSafariViewController(url: url)
-
-    UIApplication.shared.keyWindow?.rootViewController?.present(view,
-                                                                animated: true,
-                                                                completion: nil)
-  }
+public extension EPUBNavigatorDelegate {
+    func didChangedDocumentPage(currentDocumentIndex: Int) {
+        // optional
+    }
+    
+    func didChangedPaginatedDocumentPage(currentPage: Int, documentTotalPage: Int) {
+        // optional
+    }
+    
+    func didNavigateViaInternalLinkTap(to documentIndex: Int) {
+        // optional
+    }
+    
+    func didTapExternalUrl(_ url: URL) {
+        // optional
+        // TODO following lines have been moved from the original implementation and might need to be revisited at some point
+        let view = SFSafariViewController(url: url)
+        UIApplication.shared.keyWindow?.rootViewController?.present(view, animated: true, completion: nil)
+    }
 }
 
-open class NavigatorViewController: UIViewController {
+
+open class EPUBNavigatorViewController: UIViewController {
     private let delegatee: Delegatee!
     fileprivate let triptychView: TriptychView
     public var userSettings: UserSettings
     fileprivate var initialProgression: Double?
     //
     public let publication: Publication
-    public weak var delegate: NavigatorDelegate?
+    public let license: DRMLicense?
+    public weak var delegate: EPUBNavigatorDelegate?
 
     public let pageTransition: PageTransition
+    public let editingActions: [EditingAction]
+    public let disableDragAndDrop: Bool
 
     /// - Parameters:
     ///   - publication: The publication.
     ///   - initialIndex: Inital index of -1 will open the publication's at the end.
-    public init(for publication: Publication, initialIndex: Int, initialProgression: Double?, pageTransition: PageTransition = .none) {
+    public init(for publication: Publication, license: DRMLicense? = nil, initialIndex: Int, initialProgression: Double?, pageTransition: PageTransition = .none, disableDragAndDrop: Bool = false, editingActions: [EditingAction] = []) {
         self.publication = publication
+        self.license = license
         self.initialProgression = initialProgression
         self.pageTransition = pageTransition
+        self.disableDragAndDrop = disableDragAndDrop
+        self.editingActions = editingActions
+
         userSettings = UserSettings()
         publication.userProperties.properties = userSettings.userProperties.properties
         delegatee = Delegatee()
         var index = initialIndex
 
         if initialIndex == -1 {
-            index = publication.spine.count
+            index = publication.readingOrder.count
         }
+        
         triptychView = TriptychView(frame: CGRect.zero,
-                                    viewCount: publication.spine.count,
+                                    viewCount: publication.readingOrder.count,
                                     initialIndex: index,
-                                    pageDirection:publication.metadata.direction)
+                                    readingProgression:publication.metadata.readingProgression)
         
         super.init(nibName: nil, bundle: nil)
+        
+        automaticallyAdjustsScrollViewInsets = false
     }
 
     @available(*, unavailable)
@@ -98,12 +117,46 @@ open class NavigatorViewController: UIViewController {
         triptychView.autoresizingMask = [.flexibleHeight, .flexibleWidth]
         view.addSubview(triptychView)
     }
-    
-    public var currentPosition:(Int, Double) {
+    public var currentPosition:Bookmark {
         get {
+          var hrefToTitle: [String: String] = {
+            let linkList = self.getTableOfContents()
+            return fulfill(linkList: linkList)
+          } ()
+          
+          func fulfill(linkList: [Link]) -> [String: String] {
+            var result = [String: String]()
+            
+            for linkItem in linkList {
+              if let href = linkItem.href, let title = linkItem.title {
+                result[href] = title
+              }
+              let subResult = fulfill(linkList: linkItem.children)
+              result.merge(subResult) { (current, another) -> String in
+                return current
+              }
+            }
+            return result
+          }
+
             let progression = triptychView.getCurrentDocumentProgression()
             let index = triptychView.getCurrentDocumentIndex()
-            return (index, progression ?? 0)
+            let readingOrder = self.getReadingOrder()[index]
+            let resourceTitle: String = {
+                if let href = readingOrder.href {
+                    return hrefToTitle[href]
+                }
+                return nil
+            } () ?? "Unknow"
+
+            return  Bookmark(bookID: 0,
+                           publicationID: publication.metadata.identifier!,
+                           resourceIndex: index,
+                           resourceHref: readingOrder.href!,
+                           resourceType: readingOrder.typeLink!,
+                           resourceTitle: resourceTitle,
+                           location: Locations(progression: progression ?? 0),
+                           locatorText: LocatorText())
         }
     }
 
@@ -119,13 +172,13 @@ open class NavigatorViewController: UIViewController {
     }
 }
 
-extension NavigatorViewController {
+extension EPUBNavigatorViewController {
 
-    /// Display the spine item at `index`.
+    /// Display the readingOrder item at `index`.
     ///
-    /// - Parameter index: The index of the spine item to display.
-    public func displaySpineItem(at index: Int) {
-        guard publication.spine.indices.contains(index) else {
+    /// - Parameter index: The index of the readingOrder item to display.
+    public func displayReadingOrderItem(at index: Int) {
+        guard publication.readingOrder.indices.contains(index) else {
             return
         }
         performTriptychViewTransition {
@@ -133,11 +186,11 @@ extension NavigatorViewController {
         }
     }
     
-    /// Display the spine item at `index` with scroll `progression`
+    /// Display the readingOrder item at `index` with scroll `progression`
     ///
-    /// - Parameter index: The index of the spine item to display.
-    public func displaySpineItem(at index: Int, progression: Double) {
-        guard publication.spine.indices.contains(index) else {
+    /// - Parameter index: The index of the readingOrder item to display.
+    public func displayReadingOrderItem(at index: Int, progression: Double) {
+        guard publication.readingOrder.indices.contains(index) else {
             return
         }
         
@@ -155,14 +208,14 @@ extension NavigatorViewController {
     /// Load resource with the corresponding href.
     ///
     /// - Parameter href: The href of the resource to load. Can contain a tag id.
-    /// - Returns: The spine index for the link
-    public func displaySpineItem(with href: String) -> Int? {
+    /// - Returns: The readingOrder index for the link
+    public func displayReadingOrderItem(with href: String) -> Int? {
         // remove id if any
         let components = href.components(separatedBy: "#")
         guard let href = components.first else {
             return nil
         }
-        guard let index = publication.spine.index(where: { $0.href?.contains(href) ?? false }) else {
+        guard let index = publication.readingOrder.index(where: { $0.href?.contains(href) ?? false }) else {
             return nil
         }
         // If any id found, set the scroll position to it, else to the
@@ -176,8 +229,8 @@ extension NavigatorViewController {
         return index
     }
 
-    public func getSpine() -> [Link] {
-        return publication.spine
+    public func getReadingOrder() -> [Link] {
+        return publication.readingOrder
     }
 
     public func getTableOfContents() -> [Link] {
@@ -196,14 +249,22 @@ extension NavigatorViewController {
     }
 }
 
-extension NavigatorViewController: ViewDelegate {
+extension EPUBNavigatorViewController: ViewDelegate {
+    
+    func willAnimatePageChange() {
+        triptychView.isUserInteractionEnabled = false
+    }
+    
+    func didEndPageAnimation() {
+        triptychView.isUserInteractionEnabled = true
+    }
     
     func handleTapOnLink(with url: URL) {
         delegate?.didTapExternalUrl(url)
     }
     
     func handleTapOnInternalLink(with href: String) {
-        guard let index = displaySpineItem(with: href) else { return }
+        guard let index = displayReadingOrderItem(with: href) else { return }
         delegate?.didNavigateViaInternalLinkTap(to: index)
     }
     
@@ -213,16 +274,16 @@ extension NavigatorViewController: ViewDelegate {
         }
     }
     
-    /// Display next spine item (spine item).
+    /// Display next document (readingOrder item).
     public func displayRightDocument() {
-        let delta = triptychView.direction == .rtl ? -1:1
-        self.displaySpineItem(at: self.triptychView.index + delta)
+        let delta = triptychView.readingProgression == .rtl ? -1:1
+        self.displayReadingOrderItem(at: self.triptychView.index + delta)
     }
 
-    /// Display previous document (spine item).
+    /// Display previous document (readingOrder item).
     public func displayLeftDocument() {
-        let delta = triptychView.direction == .rtl ? -1:1
-        self.displaySpineItem(at: self.triptychView.index - delta)
+        let delta = triptychView.readingProgression == .rtl ? -1:1
+        self.displayReadingOrderItem(at: self.triptychView.index - delta)
     }
 
     /// Returns the currently presented Publication's identifier.
@@ -242,11 +303,40 @@ extension NavigatorViewController: ViewDelegate {
     
     func didCallFromWebTTSEvent(with model: TTSBridgeModel) {
         delegate?.didCallFromWebTTSEvent(with: model)
+   }
+
+    func requestCopySelection() -> Bool {
+        let allowed = license?.canCopy ?? true
+        if !allowed {
+            delegate?.presentError(.copyForbidden)
+        }
+        return allowed
+    }
+    
+    func didCopySelection() {
+        let pasteboard = UIPasteboard.general
+        
+        guard let license = license else {
+            return
+        }
+        guard license.canCopy else {
+            pasteboard.items = []
+            return
+        }
+        guard let text = pasteboard.string else {
+            return
+        }
+        
+        let authorizedText = license.copy(text)
+        if authorizedText != text {
+            // We overwrite the pasteboard only if the authorized text is different to avoid erasing formatting
+            pasteboard.string = authorizedText
+        }
     }
 
 }
 
-extension NavigatorViewController {
+extension EPUBNavigatorViewController {
     
     public func isReadyToTTS(completion: ((Bool) -> Void)?) {
         (triptychView.currentView as? WebView)?.evaluateJavaScript("tts_result_json;") { (result, error) in
@@ -286,7 +376,7 @@ extension NavigatorViewController {
 
 /// Used to hide conformance to package-private delegate protocols.
 private final class Delegatee: NSObject {
-    weak var parent: NavigatorViewController!
+    weak var parent: EPUBNavigatorViewController!
     fileprivate var firstView = true
 }
 
@@ -295,10 +385,10 @@ extension Delegatee: TriptychViewDelegate {
     public func triptychView(_ view: TriptychView, viewForIndex index: Int,
                              location: BinaryLocation) -> UIView {
         
-        let webView = WebView(frame: view.bounds, initialLocation: location, pageTransition: parent.pageTransition)
-        webView.direction = view.direction
-        
-        let link = parent.publication.spine[index]
+        let webView = WebView(frame: view.bounds, initialLocation: location, pageTransition: parent.pageTransition, disableDragAndDrop: parent.disableDragAndDrop, editingActions: parent.editingActions)
+        webView.readingProgression = view.readingProgression
+      
+        let link = parent.publication.readingOrder[index]
 
         if let url = parent.publication.uriTo(link: link) {
             let urlRequest = URLRequest(url: url)
@@ -339,7 +429,7 @@ extension Delegatee: TriptychViewDelegate {
 }
 
 
-extension NavigatorViewController {
+extension EPUBNavigatorViewController {
     
     public var contentView: UIView {
         return triptychView
@@ -383,3 +473,8 @@ extension NavigatorViewController {
     }
 }
 
+
+@available(*, deprecated, renamed: "EPUBNavigatorViewController")
+public typealias NavigatorViewController = EPUBNavigatorViewController
+@available(*, deprecated, renamed: "EPUBNavigatorDelegate")
+public typealias NavigatorDelegate = EPUBNavigatorDelegate
