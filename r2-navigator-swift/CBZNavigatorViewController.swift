@@ -30,7 +30,7 @@ open class CBZNavigatorViewController: UIViewController {
     public var totalPageNumber: Int
     public var scrollView: UIScrollView!
     var imageView: UIImageView!
-
+    
     /// Initialize the renderer.
     ///
     /// - Parameters:
@@ -43,18 +43,18 @@ open class CBZNavigatorViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
         automaticallyAdjustsScrollViewInsets = false
     }
-
+    
     required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
+    
     override open func loadView() {
         scrollView = UIScrollView()
         scrollView.backgroundColor = UIColor.black
         scrollView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view = scrollView
     }
-
+    
     override open func viewDidLoad() {
         super.viewDidLoad()
         scrollView.delegate = self
@@ -73,28 +73,28 @@ open class CBZNavigatorViewController: UIViewController {
 }
 
 extension CBZNavigatorViewController {
-
+    
     @objc public func loadNext() {
         load(nextReadingOrderItem())
     }
-
+    
     @objc public func loadPrevious() {
         load(previousReadingOrderItem())
     }
-
+    
     /// Load resource at given index.
     ///
     /// - Parameter index: The index of the resource to load.
     public func load(at index: Int) {
         load(readingOrderItem(at: index))
     }
-
+    
     /// Load `link` resource into the ImageView.
     /// From PublicationRenderingView protocol.
     ///
     /// - Parameter link: The resource to render.
     func load(_ link: Link?) {
-        guard let link = link, let url = publication.url(to: link) else {
+        guard let link = link, let url = publication.uriTo(link: link) else {
             return
         }
         getDataFromUrl(url: url) { (data, response, error)  in
@@ -113,27 +113,27 @@ extension CBZNavigatorViewController {
             }
         }
     }
-
-
+    
+    
     func getDataFromUrl(url: URL, completion: @escaping (_ data: Data?, _  response: HTTPURLResponse?, _ error: Error?) -> Void) {
         URLSession.shared.dataTask(with: url) { (data, response, error) in
             completion(data, response as? HTTPURLResponse, error)
             }.resume()
     }
-
+    
     /// Return the current readingOrder item.
     ///
     /// - Returns: The current readingOrder item.
     fileprivate func currentReadingOrderItem() -> Link? {
         return publication.readingOrder[pageNumber]
     }
-
+    
     /// Return the next readingOrder item, if any, and move the index.
     ///
     /// - Returns: The next readingOrder item regarding current index.
     fileprivate func nextReadingOrderItem(updateIndex: Bool = true) -> Link? {
         let newIndex = pageNumber.advanced(by: 1)
-
+        
         guard publication.readingOrder.indices.contains(newIndex) else {
             return nil
         }
@@ -142,13 +142,13 @@ extension CBZNavigatorViewController {
         }
         return publication.readingOrder[newIndex]
     }
-
+    
     /// Return the previous readingOrder item, if any, and move the index.
     ///
     /// - Returns: The previous readingOrder item regarding current index.
     fileprivate func previousReadingOrderItem(updateIndex: Bool = true) -> Link? {
         let newIndex = pageNumber.advanced(by: -1)
-
+        
         guard publication.readingOrder.indices.contains(newIndex) else {
             return nil
         }
@@ -157,7 +157,7 @@ extension CBZNavigatorViewController {
         }
         return publication.readingOrder[newIndex]
     }
-
+    
     /// Safely return the readingOrder at index if any.
     ///
     /// - Parameter index: The index of the desired readingOrder item.

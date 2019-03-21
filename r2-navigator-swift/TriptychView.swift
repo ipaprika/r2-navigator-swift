@@ -1,19 +1,19 @@
  //
-//  TriptychView.swift
-//  r2-navigator-swift
-//
-//  Created by Winnie Quinn, Alexandre Camilleri on 8/23/17.
-//
-//  Copyright 2018 Readium Foundation. All rights reserved.
-//  Use of this source code is governed by a BSD-style license which is detailed
-//  in the LICENSE file present in the project repository where this source code is maintained.
-//
-
-import UIKit
-import R2Shared
-
-protocol TriptychViewDelegate: class {
-
+ //  TriptychView.swift
+ //  r2-navigator-swift
+ //
+ //  Created by Winnie Quinn, Alexandre Camilleri on 8/23/17.
+ //
+ //  Copyright 2018 Readium Foundation. All rights reserved.
+ //  Use of this source code is governed by a BSD-style license which is detailed
+ //  in the LICENSE file present in the project repository where this source code is maintained.
+ //
+ 
+ import UIKit
+ import R2Shared
+ 
+ protocol TriptychViewDelegate: class {
+    
     func triptychView(
         _ view: TriptychView,
         viewForIndex index: Int,
@@ -21,23 +21,23 @@ protocol TriptychViewDelegate: class {
         -> UIView
     
     func viewsDidUpdate(documentIndex:Int)
-}
-
-final class TriptychView: UIView {
-
+ }
+ 
+ final class TriptychView: UIView {
+    
     fileprivate enum Clamping {
         case none
         case onlyPrevious
         case onlyNext
     }
-
+    
     /// The array containing the Views for the current document, and possibly for
     /// the next and previous or other kind of preloading.
     internal enum Views {
         case one(view: UIView)
         case two(firstView: UIView, secondView: UIView)
         case many(currentView: UIView, otherViews: Disjunction<UIView, UIView>)
-
+        
         var array: [UIView] {
             switch self {
             case .one(let view):
@@ -55,7 +55,7 @@ final class TriptychView: UIView {
                 }
             }
         }
-
+        
         var count: Int {
             switch self {
             case .one:
@@ -67,7 +67,7 @@ final class TriptychView: UIView {
             }
         }
     }
-
+    
     /// Return the currently presented view from the Views array.
     var currentView: UIView? {
         switch views {
@@ -89,35 +89,35 @@ final class TriptychView: UIView {
             return index == viewCount - 1 ? b : a
         }
     }
-
+    
     public weak var delegate: TriptychViewDelegate? {
         didSet {
             self.updateViews()
         }
     }
-
+    
     fileprivate(set) var index: Int
-
+    
     fileprivate let scrollView: UIScrollView
-
+    
     public let viewCount: Int
-
+    
     internal var views: Views?
     
     let leading, trailing: BinaryLocation
     let readingProgression: ReadingProgression
-
+    
     fileprivate var clamping: Clamping = .none
-
+    
     private var isAtAnEdge: Bool {
         return index == 0 || index == viewCount - 1
     }
     
     public init(frame: CGRect, viewCount: Int, initialIndex: Int, readingProgression: ReadingProgression) {
-
+        
         precondition(viewCount >= 1)
         precondition(initialIndex >= 0 && initialIndex < viewCount)
-
+        
         index = initialIndex
         self.viewCount = viewCount
         self.readingProgression = readingProgression
@@ -130,7 +130,7 @@ final class TriptychView: UIView {
         }
         
         super.init(frame: frame)
-
+        
         scrollView.delegate = self
         scrollView.frame = bounds
         scrollView.autoresizingMask = [.flexibleHeight, .flexibleWidth]
@@ -139,7 +139,7 @@ final class TriptychView: UIView {
         scrollView.showsHorizontalScrollIndicator = false
         addSubview(scrollView)
     }
-
+    
     deinit {
         guard let views = views else {
             return
@@ -150,24 +150,24 @@ final class TriptychView: UIView {
             }
         }
     }
-
+    
     @available(*, unavailable)
     public required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
+    
     public override func layoutSubviews() {
         if views == nil {
             updateViews()
         }
-
+        
         guard let views = self.views else {
             scrollView.contentSize = bounds.size
             return
         }
-
+        
         let size = frame.size
-
+        
         scrollView.contentSize = CGSize(width: size.width * CGFloat(views.count), height: size.height)
         
         let viewList:[UIView] = {
@@ -180,7 +180,7 @@ final class TriptychView: UIView {
         for (index, view) in viewList.enumerated() {
             view.frame = CGRect(origin: CGPoint(x: size.width * CGFloat(index), y: 0), size: size)
         }
-
+        
         let pageOffset = min(1, index)
         
         let offset:CGFloat = {
@@ -192,13 +192,13 @@ final class TriptychView: UIView {
         
         scrollView.contentOffset.x = offset
     }
-
+    
     fileprivate func updateViews(previousIndex: Int? = nil) {
-
+        
         if previousIndex == index {
             return
         }
-
+        
         guard let delegate = delegate else {
             return
         }
@@ -207,9 +207,9 @@ final class TriptychView: UIView {
             guard let views = views, let previousIndex = previousIndex else {
                 return delegate.triptychView(self, viewForIndex: index, location: location)
             }
-
+            
             var indexesToCurrentViews: [Int: UIView] = [:]
-
+            
             switch views {
             case .one(let view):
                 indexesToCurrentViews[0] = view
@@ -228,14 +228,14 @@ final class TriptychView: UIView {
                     indexesToCurrentViews[previousIndex + 1] = secondView
                 }
             }
-
+            
             if let view = indexesToCurrentViews[index] {
                 return view
             }
-
+            
             return delegate.triptychView(self, viewForIndex: index, location: location)
         }
-
+        
         switch viewCount {
         case 1:
             assert(index == 0)
@@ -271,19 +271,19 @@ final class TriptychView: UIView {
                         second: viewForIndex(index + 1, location: leading)))
             }
         }
-
+        
         delegate.viewsDidUpdate(documentIndex: index)
-    
+        
         syncSubviews()
         setNeedsLayout()
     }
-
+    
     private func syncSubviews() {
         let webViewsBefore = scrollView.subviews.compactMap { $0 as? WebView }
         scrollView.subviews.forEach({
             $0.removeFromSuperview()
         })
-
+        
         if let viewArray = views?.array {
             viewArray.forEach({
                 if let webview = ($0 as? WebView) {
@@ -297,16 +297,16 @@ final class TriptychView: UIView {
             if $0.superview == nil { $0.removeMessageHandlers() }
         }
     }
-}
-
-extension TriptychView {
+ }
+ 
+ extension TriptychView {
     /// Move to the given index
     ///
     /// - Parameters:
     ///   - nextIndex: The index to move to.
     internal func moveTo(index nextIndex: Int, id: String? = nil) {
         var cw = currentView as! WebView
-
+        
         guard index != nextIndex else {
             if let id = id {
                 if id == "" {
@@ -317,12 +317,12 @@ extension TriptychView {
             }
             return
         }
-
+        
         var currentRect = scrollView.contentOffset
         let currentFrameSize = scrollView.frame.size
         
         let coefficient = CGFloat(readingProgression == .rtl ? -1:1)
-
+        
         if index < nextIndex {
             currentRect.x += coefficient*currentFrameSize.width
             scrollView.scrollRectToVisible(CGRect(origin: currentRect, size: currentFrameSize), animated: false)
@@ -332,13 +332,13 @@ extension TriptychView {
             scrollView.scrollRectToVisible(CGRect(origin: currentRect, size: currentFrameSize), animated: false)
             cw.scrollAt(location: leading)
         }
-
+        
         let previousIndex = index
-
+        
         index = nextIndex
         clamping = .none
         updateViews(previousIndex: previousIndex)
-
+        
         // get the new current view after change.
         cw = currentView as! WebView
         if let id = id {
@@ -359,12 +359,12 @@ extension TriptychView {
             }
         }
     }
-
+    
     /// Return the index of the document currently being displayed.
     public func getCurrentDocumentIndex() -> Int {
         return index
     }
-
+    
     /// Returns the progression in the document currently being displayed.
     public func getCurrentDocumentProgression() -> Double? {
         guard currentView != nil else {
@@ -372,19 +372,19 @@ extension TriptychView {
         }
         return (currentView as! WebView).progression
     }
-}
-
-extension TriptychView: UIScrollViewDelegate {
-
+ }
+ 
+ extension TriptychView: UIScrollViewDelegate {
+    
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard let views = views else {
             return
         }
-
+        
         if views.count == 3 {
             let width = frame.size.width
             let xOffset = scrollView.contentOffset.x
-
+            
             switch clamping {
             case .none:
                 if xOffset < width {
@@ -414,11 +414,11 @@ extension TriptychView: UIScrollViewDelegate {
         if decelerate { return }
         clamping = .none
     }
-
+    
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-
+        
         clamping = .none
-
+        
         let previousIndex = index
         
         let offset:CGFloat = {
@@ -429,7 +429,7 @@ extension TriptychView: UIScrollViewDelegate {
         } ()
         
         let pageOffset = Int(round(offset / scrollView.frame.width))
-
+        
         if pageOffset == 0 {
             if index > 0 {
                 index -= 1
@@ -442,7 +442,7 @@ extension TriptychView: UIScrollViewDelegate {
             assert(pageOffset == 2)
             index += 1
         }
-
+        
         updateViews(previousIndex: previousIndex)
         
         // This works around a very specific case that may be a bug in iOS's scroll
@@ -471,4 +471,4 @@ extension TriptychView: UIScrollViewDelegate {
                 animated: true)
         }
     }
-}
+ }

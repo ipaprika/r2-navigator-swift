@@ -8,11 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		03BF0132221DAFDA0051050B /* EditingAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03BF0131221DAFDA0051050B /* EditingAction.swift */; };
-		03C3CC68222DBD8600A01731 /* R2Shared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03C3CC67222DBD8600A01731 /* R2Shared.framework */; };
 		1D3A2F56218C85A100108B31 /* PageTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3A2F55218C85A100108B31 /* PageTransition.swift */; };
 		C33F793A2199C5E300123A74 /* R2Shared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C33F79392199C5E300123A74 /* R2Shared.framework */; };
 		C34D803221B42A2900CB5F48 /* TTSBridgeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34D803121B42A2900CB5F48 /* TTSBridgeModel.swift */; };
-		C3EB74EE21986A3B008D0242 /* ObjectMapper.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C3EB74ED21986A3B008D0242 /* ObjectMapper.framework */; };
 		CA0B3AC3222EE555006D9363 /* PDFNavigatorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0B3AC2222EE555006D9363 /* PDFNavigatorViewController.swift */; };
 		F341C2711F506ED5005E6758 /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F341C2701F506ED5005E6758 /* UserSettings.swift */; };
 		F3E7D3D41F4D83B000DF166D /* r2-navigator-swift.h in Headers */ = {isa = PBXBuildFile; fileRef = F3E7D3C61F4D83B000DF166D /* r2-navigator-swift.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -26,7 +24,6 @@
 
 /* Begin PBXFileReference section */
 		03BF0131221DAFDA0051050B /* EditingAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditingAction.swift; sourceTree = "<group>"; };
-		03C3CC67222DBD8600A01731 /* R2Shared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = R2Shared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D3A2F55218C85A100108B31 /* PageTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageTransition.swift; sourceTree = "<group>"; };
 		C33F79392199C5E300123A74 /* R2Shared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = R2Shared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C34D803121B42A2900CB5F48 /* TTSBridgeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSBridgeModel.swift; sourceTree = "<group>"; };
@@ -52,7 +49,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				C33F793A2199C5E300123A74 /* R2Shared.framework in Frameworks */,
-				C3EB74EE21986A3B008D0242 /* ObjectMapper.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -111,8 +107,6 @@
 			children = (
 				C33F79392199C5E300123A74 /* R2Shared.framework */,
 				C3EB74ED21986A3B008D0242 /* ObjectMapper.framework */,
-				F3B2C86C1F603E79007601E4 /* SwiftyJSON.framework */,
-				F3E7D4291F4EE07D00DF166D /* R2Shared.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -136,7 +130,7 @@
 		F3E7D42C1F4EE0DB00DF166D /* CBZ */ = {
 			isa = PBXGroup;
 			children = (
-				F3E7D42D1F4EE0FE00DF166D /* CBZNavigatorViewController.swift */,
+				F3E7D42D1F4EE0FE00DF166D /* CbzNavigatorViewController.swift */,
 			);
 			name = CBZ;
 			sourceTree = "<group>";
@@ -247,7 +241,7 @@
 				F3E7D3E61F4D84EF00DF166D /* WebView.swift in Sources */,
 				F3E7D42E1F4EE0FE00DF166D /* CbzNavigatorViewController.swift in Sources */,
 				C34D803221B42A2900CB5F48 /* TTSBridgeModel.swift in Sources */,
-				F3E7D42E1F4EE0FE00DF166D /* CBZNavigatorViewController.swift in Sources */,
+				F3E7D42E1F4EE0FE00DF166D /* CbzNavigatorViewController.swift in Sources */,
 				F3E7D3E01F4D847E00DF166D /* Disjunction.swift in Sources */,
 				F341C2711F506ED5005E6758 /* UserSettings.swift in Sources */,
 				F3E7D3DE1F4D845B00DF166D /* BinaryLocation.swift in Sources */,

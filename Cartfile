@@ -1,1 +1,2 @@
-github "ipaprika/r2-shared-swift" "develop"
+github "ipaprika/r2-shared-swift" "feature/upstream_merge_fix"
+github "tristanhimmelman/ObjectMapper" ~> 3.4

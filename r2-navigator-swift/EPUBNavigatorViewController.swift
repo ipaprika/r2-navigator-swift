@@ -92,12 +92,10 @@ open class EPUBNavigatorViewController: UIViewController {
             index = publication.readingOrder.count
         }
         
-        triptychView = TriptychView(
-            frame: CGRect.zero,
-            viewCount: publication.readingOrder.count,
-            initialIndex: index,
-            readingProgression: publication.contentLayout.readingProgression
-        )
+        triptychView = TriptychView(frame: CGRect.zero,
+                                    viewCount: publication.readingOrder.count,
+                                    initialIndex: index,
+                                    readingProgression:publication.metadata.readingProgression)
         
         super.init(nibName: nil, bundle: nil)
         
@@ -129,11 +127,11 @@ open class EPUBNavigatorViewController: UIViewController {
             func fulfill(linkList: [Link]) -> [String: String] {
                 var result = [String: String]()
                 
-                for link in linkList {
-                    if let title = link.title {
-                        result[link.href] = title
+                for linkItem in linkList {
+                    if let href = linkItem.href, let title = linkItem.title {
+                        result[href] = title
                     }
-                    let subResult = fulfill(linkList: link.children)
+                    let subResult = fulfill(linkList: linkItem.children)
                     result.merge(subResult) { (current, another) -> String in
                         return current
                     }
@@ -144,18 +142,21 @@ open class EPUBNavigatorViewController: UIViewController {
             let progression = triptychView.getCurrentDocumentProgression()
             let index = triptychView.getCurrentDocumentIndex()
             let readingOrder = self.getReadingOrder()[index]
-            let resourceTitle: String = hrefToTitle[readingOrder.href] ?? "Unknown"
-
-            return Bookmark(
-                bookID: 0,
-                publicationID: publication.metadata.identifier!,
-                resourceIndex: index,
-                resourceHref: readingOrder.href,
-                resourceType: readingOrder.type ?? "",
-                resourceTitle: resourceTitle,
-                location: Locations(progression: progression ?? 0),
-                locatorText: LocatorText()
-            )
+            let resourceTitle: String = {
+                if let href = readingOrder.href {
+                    return hrefToTitle[href]
+                }
+                return nil
+                } () ?? "Unknow"
+            
+            return  Bookmark(bookID: 0,
+                             publicationID: publication.metadata.identifier!,
+                             resourceIndex: index,
+                             resourceHref: readingOrder.href!,
+                             resourceType: readingOrder.typeLink!,
+                             resourceTitle: resourceTitle,
+                             location: Locations(progression: progression ?? 0),
+                             locatorText: LocatorText())
         }
 
     }
@@ -164,9 +165,12 @@ open class EPUBNavigatorViewController: UIViewController {
         super.viewWillDisappear(animated)
         
         // Save the currently opened document index and progression.
-        let progression = triptychView.getCurrentDocumentProgression()
-        let index = triptychView.getCurrentDocumentIndex()
-        delegate?.willExitPublication(documentIndex: index, progression: progression)
+        if navigationController == nil {
+            let progression = triptychView.getCurrentDocumentProgression()
+            let index = triptychView.getCurrentDocumentIndex()
+            
+            delegate?.willExitPublication(documentIndex: index, progression: progression)
+        }
     }
 }
 
@@ -213,13 +217,13 @@ extension EPUBNavigatorViewController {
         guard let href = components.first else {
             return nil
         }
-        guard let index = publication.readingOrder.index(where: { $0.href.contains(href) }) else {
+        guard let index = publication.readingOrder.index(where: { $0.href?.contains(href) ?? false }) else {
             return nil
         }
         // If any id found, set the scroll position to it, else to the
         // beggining of the document.
         let id = (components.count > 1 ? components.last : "")
-
+        
         // Jumping set to true to avoid clamping.
         performTriptychViewTransition {
             self.triptychView.moveTo(index: index, id: id)
@@ -232,7 +236,7 @@ extension EPUBNavigatorViewController {
     }
 
     public func getTableOfContents() -> [Link] {
-        return publication.toc
+        return publication.tableOfContents
     }
 
     public func updateUserSettingStyle() {
@@ -292,7 +296,7 @@ extension EPUBNavigatorViewController: ViewDelegate {
     }
 
     public func publicationBaseUrl() -> URL? {
-        return publication.baseURL
+        return publication.baseUrl
     }
 
     internal func handleCenterTap() {
@@ -385,25 +389,25 @@ extension Delegatee: TriptychViewDelegate {
         
         let webView = WebView(frame: view.bounds, initialLocation: location, pageTransition: parent.pageTransition, disableDragAndDrop: parent.disableDragAndDrop, editingActions: parent.editingActions)
         webView.readingProgression = view.readingProgression
-      
+        
         let link = parent.publication.readingOrder[index]
-
-        if let url = parent.publication.url(to: link) {
+        
+        if let url = parent.publication.uriTo(link: link) {
             let urlRequest = URLRequest(url: url)
-
+            
             webView.viewDelegate = parent
             webView.load(urlRequest)
             webView.userSettings = parent.userSettings
-
+            
             // Load last saved regionIndex for the first view.
             if parent.initialProgression != nil {
                 webView.progression = parent.initialProgression
                 parent.initialProgression = nil
             }
             // Check if link is FXL.
-            if (parent.publication.metadata.rendition?.layout == .fixed
+            if (parent.publication.metadata.rendition.layout == .fixed
                 && link.properties.layout == nil)
-                || link.properties.layout == .fixed {
+                || link.properties.layout == "fixed"{
                 webView.scrollView.isPagingEnabled = false
                 webView.scrollView.minimumZoomScale = 1
                 webView.scrollView.maximumZoomScale = 5

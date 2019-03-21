@@ -26,7 +26,7 @@ open class PDFNavigatorViewController: UIViewController, Loggable {
     public let publication: Publication
     
     public private(set) var pdfView: PDFView!
-
+    
     public init(publication: Publication) {
         self.publication = publication
         
@@ -38,7 +38,7 @@ open class PDFNavigatorViewController: UIViewController, Loggable {
     public required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
+    
     override open func viewDidLoad() {
         super.viewDidLoad()
         
@@ -60,10 +60,10 @@ open class PDFNavigatorViewController: UIViewController, Loggable {
         pdfView.displaysAsBook = true
         pdfView.autoScales = true
     }
-
+    
     /// Loads `Link` resource into the PDF view.
     func load(_ link: Link) {
-        guard let url = publication.url(to: link),
+        guard let url = publication.uriTo(link: link),
             let document = PDFDocument(url: url) else
         {
             log(.error, "Can't open PDF document at \(link)")
