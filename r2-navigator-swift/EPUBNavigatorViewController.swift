@@ -466,6 +466,15 @@ extension EPUBNavigatorViewController {
     }
 }
 
+extension EPUBNavigatorViewController {
+    
+    public var currentDocumentPosition: (Int, Double) {
+        let documentIndex = triptychView.getCurrentDocumentIndex()
+        let documentProgression = triptychView.getCurrentDocumentProgression() ?? 0.0
+        return (documentIndex, documentProgression)
+    }
+    
+}
 
 @available(*, deprecated, renamed: "EPUBNavigatorViewController")
 public typealias NavigatorViewController = EPUBNavigatorViewController
