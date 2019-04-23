@@ -15,12 +15,6 @@ import WebKit
 import SafariServices
 
 
-public enum NavigatorError: Error {
-    /// The user tried to copy the text selection but the DRM License doesn't allow it.
-    case copyForbidden
-}
-
-
 public protocol EPUBNavigatorDelegate: class {
     func middleTapHandler()
     func willExitPublication(documentIndex: Int, progression: Double?)
@@ -58,6 +52,8 @@ public extension EPUBNavigatorDelegate {
 }
 
 
+public typealias EPUBContentInsets = (top: CGFloat, bottom: CGFloat)
+
 open class EPUBNavigatorViewController: UIViewController {
     private let delegatee: Delegatee!
     fileprivate let triptychView: TriptychView
@@ -69,19 +65,28 @@ open class EPUBNavigatorViewController: UIViewController {
     public weak var delegate: EPUBNavigatorDelegate?
 
     public let pageTransition: PageTransition
-    public let editingActions: [EditingAction]
     public let disableDragAndDrop: Bool
+    
+    fileprivate let editingActions: EditingActionsController
+
+    /// Content insets used to add some vertical margins around reflowable EPUB publications. The insets can be configured for each size class to allow smaller margins on compact screens.
+    public let contentInset: [UIUserInterfaceSizeClass: EPUBContentInsets]
 
     /// - Parameters:
     ///   - publication: The publication.
     ///   - initialIndex: Inital index of -1 will open the publication's at the end.
-    public init(for publication: Publication, license: DRMLicense? = nil, initialIndex: Int, initialProgression: Double?, pageTransition: PageTransition = .none, disableDragAndDrop: Bool = false, editingActions: [EditingAction] = []) {
+    public init(for publication: Publication, license: DRMLicense? = nil, initialIndex: Int, initialProgression: Double?, pageTransition: PageTransition = .none, disableDragAndDrop: Bool = false, editingActions: [EditingAction] = EditingAction.defaultActions, contentInset: [UIUserInterfaceSizeClass: EPUBContentInsets]? = nil) {
         self.publication = publication
         self.license = license
         self.initialProgression = initialProgression
         self.pageTransition = pageTransition
         self.disableDragAndDrop = disableDragAndDrop
-        self.editingActions = editingActions
+        self.contentInset = contentInset ?? [
+            .compact: (top: 20, bottom: 20),
+            .regular: (top: 44, bottom: 44)
+        ]
+      
+        self.editingActions = EditingActionsController(actions: editingActions, license: license)
 
         userSettings = UserSettings()
         publication.userProperties.properties = userSettings.userProperties.properties
@@ -99,7 +104,7 @@ open class EPUBNavigatorViewController: UIViewController {
         
         super.init(nibName: nil, bundle: nil)
         
-        automaticallyAdjustsScrollViewInsets = false
+        self.editingActions.delegate = self
     }
 
     @available(*, unavailable)
@@ -117,48 +122,55 @@ open class EPUBNavigatorViewController: UIViewController {
         triptychView.autoresizingMask = [.flexibleHeight, .flexibleWidth]
         view.addSubview(triptychView)
     }
-    public var currentPosition:Bookmark {
-        get {
-            var hrefToTitle: [String: String] = {
-                let linkList = self.getTableOfContents()
-                return fulfill(linkList: linkList)
-            } ()
-            
-            func fulfill(linkList: [Link]) -> [String: String] {
-                var result = [String: String]()
-                
-                for linkItem in linkList {
-                    if let href = linkItem.href, let title = linkItem.title {
-                        result[href] = title
-                    }
-                    let subResult = fulfill(linkList: linkItem.children)
-                    result.merge(subResult) { (current, another) -> String in
-                        return current
-                    }
+
+    public var currentLocation: Locator? {
+        var hrefToTitle: [String: String] = {
+            let linkList = self.getTableOfContents()
+            return fulfill(linkList: linkList)
+        } ()
+
+        func fulfill(linkList: [Link]) -> [String: String] {
+            var result = [String: String]()
+
+            for link in linkList {
+                if let title = link.title {
+                    result[link.href] = title
                 }
-                return result
+                let subResult = fulfill(linkList: link.children)
+                result.merge(subResult) { (current, another) -> String in
+                    return current
+                }
             }
-            
-            let progression = triptychView.getCurrentDocumentProgression()
-            let index = triptychView.getCurrentDocumentIndex()
-            let readingOrder = self.getReadingOrder()[index]
-            let resourceTitle: String = {
-                if let href = readingOrder.href {
-                    return hrefToTitle[href]
-                }
-                return nil
-                } () ?? "Unknow"
-            
-            return  Bookmark(bookID: 0,
-                             publicationID: publication.metadata.identifier!,
-                             resourceIndex: index,
-                             resourceHref: readingOrder.href!,
-                             resourceType: readingOrder.typeLink!,
-                             resourceTitle: resourceTitle,
-                             location: Locations(progression: progression ?? 0),
-                             locatorText: LocatorText())
+            return result
         }
 
+        let progression = triptychView.getCurrentDocumentProgression()
+        let index = triptychView.getCurrentDocumentIndex()
+        let readingOrder = self.getReadingOrder()[index]
+        let resourceTitle: String = hrefToTitle[readingOrder.href] ?? "Unknown"
+        
+        return Locator(
+            href: readingOrder.href,
+            type: readingOrder.type ?? "text/html",
+            title: resourceTitle,
+            locations: Locations(
+                progression: progression ?? 0
+            )
+        )
+    }
+    
+    @available(*, deprecated, message: "Bookmark model is deprecated, use your own model and `currentLocation`")
+    public var currentPosition: Bookmark? {
+        guard let publicationID = publication.metadata.identifier,
+            let locator = currentLocation else
+        {
+            return nil
+        }
+        return Bookmark(
+            publicationID: publicationID,
+            resourceIndex: triptychView.getCurrentDocumentIndex(),
+            locator: locator
+        )
     }
 
     open override func viewWillDisappear(_ animated: Bool) {
@@ -251,7 +263,7 @@ extension EPUBNavigatorViewController {
     }
 }
 
-extension EPUBNavigatorViewController: ViewDelegate {
+extension EPUBNavigatorViewController: WebViewDelegate {
     
     func willAnimatePageChange() {
         triptychView.isUserInteractionEnabled = false
@@ -270,8 +282,8 @@ extension EPUBNavigatorViewController: ViewDelegate {
         delegate?.didNavigateViaInternalLinkTap(to: index)
     }
     
-    func documentPageDidChanged(webview: WebView, currentPage: Int, totalPage: Int) {
-        if triptychView.currentView == webview {
+    func documentPageDidChange(webView: WebView, currentPage: Int, totalPage: Int) {
+        if triptychView.currentView == webView {
             delegate?.didChangedPaginatedDocumentPage(currentPage: currentPage, documentTotalPage: totalPage)
         }
     }
@@ -302,7 +314,15 @@ extension EPUBNavigatorViewController: ViewDelegate {
     internal func handleCenterTap() {
         delegate?.middleTapHandler()
     }
+
+}
+
+extension EPUBNavigatorViewController: EditingActionsControllerDelegate {
     
+    func editingActionsDidPreventCopy(_ editingActions: EditingActionsController) {
+        delegate?.presentError(.copyForbidden)
+    }
+
     func didCallFromWebTTSEvent(with model: TTSBridgeModel) {
         delegate?.didCallFromWebTTSEvent(with: model)
    }
@@ -315,27 +335,6 @@ extension EPUBNavigatorViewController: ViewDelegate {
         return allowed
     }
     
-    func didCopySelection() {
-        let pasteboard = UIPasteboard.general
-        
-        guard let license = license else {
-            return
-        }
-        guard license.canCopy else {
-            pasteboard.items = []
-            return
-        }
-        guard let text = pasteboard.string else {
-            return
-        }
-        
-        let authorizedText = license.copy(text)
-        if authorizedText != text {
-            // We overwrite the pasteboard only if the authorized text is different to avoid erasing formatting
-            pasteboard.string = authorizedText
-        }
-    }
-
 }
 
 extension EPUBNavigatorViewController {
@@ -384,15 +383,22 @@ private final class Delegatee: NSObject {
 
 extension Delegatee: TriptychViewDelegate {
 
-    public func triptychView(_ view: TriptychView, viewForIndex index: Int,
-                             location: BinaryLocation) -> UIView {
-        
-        let webView = WebView(frame: view.bounds, initialLocation: location, pageTransition: parent.pageTransition, disableDragAndDrop: parent.disableDragAndDrop, editingActions: parent.editingActions)
-        webView.readingProgression = view.readingProgression
-        
+    public func triptychView(_ view: TriptychView, viewForIndex index: Int, location: BinaryLocation) -> UIView {
         let link = parent.publication.readingOrder[index]
+        // Check if link is FXL.
+        let hasFixedLayout = (parent.publication.metadata.rendition?.layout == .fixed && link.properties.layout == nil) || link.properties.layout == .fixed
         
-        if let url = parent.publication.uriTo(link: link) {
+        let webViewType = hasFixedLayout ? FixedWebView.self : ReflowableWebView.self
+        let webView = webViewType.init(
+            initialLocation: location,
+            readingProgression: view.readingProgression,
+            pageTransition: parent.pageTransition,
+            disableDragAndDrop: parent.disableDragAndDrop,
+            editingActions: parent.editingActions,
+            contentInset: parent.contentInset
+        )
+
+        if let url = parent.publication.url(to: link) {
             let urlRequest = URLRequest(url: url)
             
             webView.viewDelegate = parent
@@ -403,15 +409,6 @@ extension Delegatee: TriptychViewDelegate {
             if parent.initialProgression != nil {
                 webView.progression = parent.initialProgression
                 parent.initialProgression = nil
-            }
-            // Check if link is FXL.
-            if (parent.publication.metadata.rendition.layout == .fixed
-                && link.properties.layout == nil)
-                || link.properties.layout == "fixed"{
-                webView.scrollView.isPagingEnabled = false
-                webView.scrollView.minimumZoomScale = 1
-                webView.scrollView.maximumZoomScale = 5
-                webView.presentingFixedLayoutContent = true
             }
         }
         return webView

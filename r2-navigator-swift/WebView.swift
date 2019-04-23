@@ -14,7 +14,7 @@ import WebKit
 import R2Shared
 import ObjectMapper
 
-protocol ViewDelegate: class {
+protocol WebViewDelegate: class {
     func willAnimatePageChange()
     func didEndPageAnimation()
     func displayRightDocument()
@@ -26,29 +26,29 @@ protocol ViewDelegate: class {
     func handleTapOnInternalLink(with href: String)
     func documentPageDidChanged(webview: WebView, currentPage: Int ,totalPage: Int)
     func didCallFromWebTTSEvent(with model: TTSBridgeModel)
-    
-    /// Returns whether the web view is allowed to copy the text selection to the pasteboard.
-    func requestCopySelection() -> Bool
-    func didCopySelection()
+
 }
 
-final class WebView: WKWebView {
-
-    public weak var viewDelegate: ViewDelegate?
+class WebView: UIView, Loggable {
+    
+    weak var viewDelegate: WebViewDelegate?
     fileprivate let initialLocation: BinaryLocation
     
-    var readingProgression: ReadingProgression?
+    let webView: WKWebView
+
+    let readingProgression: ReadingProgression
 
     var pageTransition: PageTransition
-    var editingActions: [EditingAction]
-    
+    let contentInset: [UIUserInterfaceSizeClass: EPUBContentInsets]
+    var editingActions: EditingActionsController
+  
     weak var activityIndicatorView: UIActivityIndicatorView?
 
-    public var initialId: String?
+    var initialId: String?
     // progression and totalPages only work on 'readium-scroll-off' mode
-    public var progression: Double?
-    public var totalPages: Int?
-    public func currentPage() -> Int {
+    var progression: Double?
+    var totalPages: Int?
+    func currentPage() -> Int {
         guard progression != nil && totalPages != nil else {
             return 1
         }
@@ -63,127 +63,94 @@ final class WebView: WKWebView {
         }
     }
 
-    public var documentLoaded = false
-
-    public var presentingFixedLayoutContent = false // TMP fix for fxl.
+    var documentLoaded = false
 
     var hasLoadedJsEvents = false
-    let jsEvents = ["leftTap": leftTapped,
-                    "centerTap": centerTapped,
-                    "rightTap": rightTapped,
-                    "didLoad": documentDidLoad,
-                    "updateProgression": progressionDidChange]
     
+    var jsEvents: [String: (Any) -> Void] {
+        return [
+            "leftTap": leftTapped,
+            "centerTap": centerTapped,
+            "rightTap": rightTapped,
+            "didLoad": documentDidLoad,
+            "updateProgression": progressionDidChange
+        ]
+
     let ttsHandlerEventName = "ttsHandler"
     let ttsLogEventName = "ttsLog"
-    
-    let jsFollowUp = ["leftTap": dismissIfNeed,
-                    "centerTap": dismissIfNeed,
-                    "rightTap": dismissIfNeed]
-
-    internal enum Scroll {
-        case left
-        case right
-        
-        func proceed(on target: WebView) {
-            switch target.pageTransition {
-            case .none:
-                evaluateJavascriptForScroll(on: target)
-            case .animated:
-                performSwipeTransition(on: target)
-            }
-        }
-        
-        private func evaluateJavascriptForScroll(on target: WebView) {
-            let dir = target.readingProgression?.rawValue ?? ReadingProgression.ltr.rawValue
-            
-            switch self {
-            case .left:
-                target.evaluateJavaScript("scrollLeft(\"\(dir)\");", completionHandler: { result, error in
-                    if error == nil, let result = result as? String, result == "edge" {
-                        target.viewDelegate?.displayLeftDocument()
-                    }
-                })
-            case .right:
-                target.evaluateJavaScript("scrollRight(\"\(dir)\");", completionHandler: { result, error in
-                    if error == nil, let result = result as? String, result == "edge" {
-                        target.viewDelegate?.displayRightDocument()
-                    }
-                })
-            }
-        }
-        
-        private func performSwipeTransition(on target: WebView) {
-            let scrollView = target.scrollView
-            switch self {
-            case .left:
-                let isAtFirstPageInDocument = scrollView.contentOffset.x == 0
-                if !isAtFirstPageInDocument {
-                    target.viewDelegate?.willAnimatePageChange()
-                    return scrollView.scrollToPreviousPage()
-                }
-            case .right:
-                let isAtLastPageInDocument = scrollView.contentOffset.x == scrollView.contentSize.width - scrollView.frame.size.width
-                if !isAtLastPageInDocument {
-                    target.viewDelegate?.willAnimatePageChange()
-                    return scrollView.scrollToNextPage()
-                }
-            }
-            evaluateJavascriptForScroll(on: target)
-        }
     }
     
     var sizeObservation: NSKeyValueObservation?
-    
-    private var shouldNotifyCopySelection = false
 
-    init(frame: CGRect, initialLocation: BinaryLocation, pageTransition: PageTransition = .none, disableDragAndDrop: Bool = false, editingActions: [EditingAction] = []) {
+    required init(initialLocation: BinaryLocation, readingProgression: ReadingProgression, pageTransition: PageTransition = .none, disableDragAndDrop: Bool = false, editingActions: EditingActionsController, contentInset: [UIUserInterfaceSizeClass: EPUBContentInsets]) {
+
         self.initialLocation = initialLocation
+        self.readingProgression = readingProgression
         self.pageTransition = pageTransition
         self.editingActions = editingActions
+        self.webView = WKWebView(frame: .zero, configuration: .init())
+        self.contentInset = contentInset
       
-        super.init(frame: frame, configuration: .init())
+        super.init(frame: .zero)
+        
+        webView.frame = bounds
+        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(webView)
+
         if disableDragAndDrop { disableDragAndDropInteraction() }
         isOpaque = false
         backgroundColor = UIColor.clear
+        
+        setupWebView()
+
+        sizeObservation = scrollView.observe(\.contentSize, options: .new) { [weak self] scrollView, value in
+            guard let self = self else {
+                return
+            }
+            // update total pages
+            guard self.documentLoaded else { return }
+            guard let newWidth = value.newValue?.width else {return}
+            let pageWidth = scrollView.frame.size.width
+            if pageWidth == 0.0 {return} // Possible zero value
+            let pageCount = Int(newWidth / scrollView.frame.size.width);
+            if self.totalPages != pageCount {
+                self.totalPages = pageCount
+                self.viewDelegate?.documentPageDidChange(webView: self, currentPage: self.currentPage(), totalPage: pageCount)
+            }
+        }
+        scrollView.alpha = 0
+    }
+    
+    deinit {
+        sizeObservation = nil  // needs to be deallocated before the scrollView
+    }
+    
+    func setupWebView() {
+        webView.backgroundColor = UIColor.clear
         scrollView.backgroundColor = UIColor.clear
-        scrollView.delegate = self
-        scrollView.bounces = false
-        scrollView.isPagingEnabled = true
+        
+        webView.allowsBackForwardNavigationGestures = false
+
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
+        
         if #available(iOS 11.0, *) {
             // Prevents the pages from jumping down when the status bar is toggled
             scrollView.contentInsetAdjustmentBehavior = .never
         }
-        navigationDelegate = self
-        uiDelegate = self
-        
-        sizeObservation = scrollView.observe(\.contentSize, options: .new) { (thisScrollView, thisValue) in
-            // update total pages
-            guard self.documentLoaded else { return }
-            guard let newWidth = thisValue.newValue?.width else {return}
-            let pageWidth = self.scrollView.frame.size.width
-            if pageWidth == 0.0 {return} // Possible zero value
-            let pageCount = Int(newWidth / self.scrollView.frame.size.width);
-            if self.totalPages != pageCount {
-                self.totalPages = pageCount
-                self.viewDelegate?.documentPageDidChanged(webview: self, currentPage: self.currentPage(), totalPage: pageCount)
-            }
-        }
-        
-        scrollView.alpha = 0
-        
-      NotificationCenter.default.addObserver(self, selector: #selector(pasteboardDidChange), name: UIPasteboard.changedNotification, object: nil)
+
+        webView.navigationDelegate = self
+        webView.uiDelegate = self
+        scrollView.delegate = self
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
-    deinit {
-        NotificationCenter.default.removeObserver(self)
+  
+    var scrollView: UIScrollView {
+        return webView.scrollView
     }
 
     override func didMoveToSuperview() {
@@ -195,78 +162,60 @@ final class WebView: WKWebView {
             scrollView.delegate = self
         }
     }
+
+    func load(_ request: URLRequest) {
+        webView.load(request)
+    }
   
-    public override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        for editingAction in self.editingActions {
-            if action == Selector(editingAction.rawValue) {
-                return true
-            }
-        }
-        return false
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        return super.canPerformAction(action, withSender: sender) && editingActions.canPerformAction(action)
     }
-    
-    @objc private func pasteboardDidChange() {
-        if shouldNotifyCopySelection {
-            shouldNotifyCopySelection = false
-            viewDelegate?.didCopySelection()
-        }
-    }
-    
+
     override func copy(_ sender: Any?) {
-        guard viewDelegate?.requestCopySelection() ?? true else {
+        guard editingActions.requestCopy() else {
             return
         }
-        // We rely on UIPasteboardChanged to notify the copy to the delegate because the WKWebView sets the selection in the UIPasteboard asynchronously
-        shouldNotifyCopySelection = true
         super.copy(sender)
     }
 
-}
-
-extension WebView {
-    
-    internal func dismissIfNeed() {
+    private func dismissIfNeeded() {
         self.isUserInteractionEnabled = false
         self.isUserInteractionEnabled = true
     }
 
-    /// Called from the JS code when a tap is detected in the 2/10 left
-    /// part of the screen.
-    ///
-    /// - Parameter body: Unused.
-    internal func leftTapped(body: String) {
-        // Verify that the document is properly loaded.
-        guard documentLoaded else {
+    /// Called from the JS code when a tap is detected in the 2/10 left part of the screen.
+    private func leftTapped(body: Any) {
+        // Disables left/right taps when the document is zoomed in.
+        guard documentLoaded, scrollView.zoomScale == scrollView.minimumZoomScale else {
             return
         }
-        
-        Scroll.left.proceed(on: self)
+        scrollTo(.left)
+        dismissIfNeeded()
     }
 
-    /// Called from the JS code when a tap is detected in the 2/10 right
-    /// part of the screen.
-    ///
-    /// - Parameter body: Unused.
-    internal func rightTapped(body: String) {
-        // Verify that the document is properly loaded.
-        guard documentLoaded else {
+    /// Called from the JS code when a tap is detected in the 2/10 right part of the screen.
+    private func rightTapped(body: Any) {
+        // Disables left/right taps when the document is zoomed in.
+        guard documentLoaded, scrollView.zoomScale == scrollView.minimumZoomScale else {
             return
         }
-        Scroll.right.proceed(on: self)
+        scrollTo(.right)
+        dismissIfNeeded()
     }
 
     /// Called from the JS code when a tap is detected in the 6/10 center
     /// part of the screen.
     ///
     /// - Parameter body: Unused.
-    internal func centerTapped(body: String) {
+    private func centerTapped(body: Any) {
         viewDelegate?.handleCenterTap()
+        dismissIfNeeded()
     }
 
     /// Called by the javascript code to notify on DocumentReady.
     ///
     /// - Parameter body: Unused.
-    internal func documentDidLoad(body: String) {
+    private func documentDidLoad(body: Any) {
         documentLoaded = true
         
         switch pageTransition {
@@ -280,27 +229,24 @@ extension WebView {
         applyUserSettingsStyle()
         scrollToInitialPosition()
     }
-}
-
-extension WebView {
+    
     // Scroll at position 0-1 (0%-100%)
-    internal func scrollAt(position: Double) {
+    func scrollAt(position: Double) {
         guard position >= 0 && position <= 1 else { return }
         
-        let dir = self.readingProgression?.rawValue ?? ReadingProgression.ltr.rawValue
-
-        self.evaluateJavaScript("scrollToPosition(\'\(position)\', \'\(dir)\')",
+        let dir = readingProgression.rawValue
+        webView.evaluateJavaScript("scrollToPosition(\'\(position)\', \'\(dir)\')",
             completionHandler: nil)
     }
 
     // Scroll at the tag with id `tagId`.
-    internal func scrollAt(tagId: String) {
-        evaluateJavaScript("scrollToId(\'\(tagId)\');",
+    func scrollAt(tagId: String) {
+        webView.evaluateJavaScript("scrollToId(\'\(tagId)\');",
             completionHandler: nil)
     }
 
     // Scroll to .beggining or .end.
-    internal func scrollAt(location: BinaryLocation) {
+    func scrollAt(location: BinaryLocation) {
         switch location {
         case .left:
             scrollAt(position: 0)
@@ -310,8 +256,7 @@ extension WebView {
     }
 
     /// Moves the webView to the initial location.
-    fileprivate func scrollToInitialPosition() {
-
+    func scrollToInitialPosition() {
         /// If the savedProgression property has been set by the navigator.
         if let initialPosition = progression, initialPosition > 0.0 {
             scrollAt(position: initialPosition)
@@ -322,9 +267,50 @@ extension WebView {
         }
     }
 
+    enum ScrollDirection {
+        case left
+        case right
+    }
+    
+    func scrollTo(_ direction: ScrollDirection) {
+        let viewDelegate = self.viewDelegate
+        if case .animated = pageTransition {
+            switch direction {
+            case .left:
+                let isAtFirstPageInDocument = scrollView.contentOffset.x == 0
+                if !isAtFirstPageInDocument {
+                    viewDelegate?.willAnimatePageChange()
+                    return scrollView.scrollToPreviousPage()
+                }
+            case .right:
+                let isAtLastPageInDocument = scrollView.contentOffset.x == scrollView.contentSize.width - scrollView.frame.size.width
+                if !isAtLastPageInDocument {
+                    viewDelegate?.willAnimatePageChange()
+                    return scrollView.scrollToNextPage()
+                }
+            }
+        }
+        
+        let dir = readingProgression.rawValue
+        switch direction {
+        case .left:
+            webView.evaluateJavaScript("scrollLeft(\"\(dir)\");") { result, error in
+                if error == nil, let result = result as? String, result == "edge" {
+                    viewDelegate?.displayLeftDocument()
+                }
+            }
+        case .right:
+            webView.evaluateJavaScript("scrollRight(\"\(dir)\");") { result, error in
+                if error == nil, let result = result as? String, result == "edge" {
+                    viewDelegate?.displayRightDocument()
+                }
+            }
+        }
+    }
+
     // Called by the javascript code to notify that scrolling ended.
-    internal func progressionDidChange(body: String) {
-        guard documentLoaded, let newProgression = Double(body) else {
+    private func progressionDidChange(body: Any) {
+        guard documentLoaded, let bodyString = body as? String, let newProgression = Double(bodyString) else {
             return
         }
         
@@ -336,24 +322,16 @@ extension WebView {
         
         if originPage != currentPage {
             if let pages = totalPages {
-                viewDelegate?.documentPageDidChanged(webview: self, currentPage: currentPage, totalPage: pages)
+                viewDelegate?.documentPageDidChange(webView: self, currentPage: currentPage, totalPage: pages)
             }
         }
     }
     
     /// Update webview style to userSettings.
-    internal func applyUserSettingsStyle() {
-        guard let userSettings = userSettings else {
-            return
-        }
-        for cssProperty in userSettings.userProperties.properties {
-            evaluateJavaScript("setProperty(\"\(cssProperty.name)\", \"\(cssProperty.toString())\");", completionHandler: nil)
-        }
-        // Disable paginated mode if scroll is on.
-        if let scroll = userSettings.userProperties.getProperty(reference: ReadiumCSSReference.scroll.rawValue) as? Switchable {
-            scrollView.isPagingEnabled = !scroll.on
-        }
+    func applyUserSettingsStyle() {
+        // To override in subclasses.
     }
+
 }
 
 extension WebView {
@@ -390,11 +368,11 @@ extension WebView: WKScriptMessageHandler {
     }
 
     /// Add a message handler for incoming javascript events.
-    internal func addMessageHandlers() {
+    func addMessageHandlers() {
         if hasLoadedJsEvents { return }
         // Add the message handlers.
         for eventName in jsEvents.keys {
-            configuration.userContentController.add(self, name: eventName)
+            webView.configuration.userContentController.add(self, name: eventName)
         }
         configuration.userContentController.add(self, name: ttsHandlerEventName)
         configuration.userContentController.add(self, name: ttsLogEventName)
@@ -402,9 +380,9 @@ extension WebView: WKScriptMessageHandler {
     }
 
     // Deinit message handlers (preventing strong reference cycle).
-    internal func removeMessageHandlers() {
+    func removeMessageHandlers() {
         for eventName in jsEvents.keys {
-            configuration.userContentController.removeScriptMessageHandler(forName: eventName)
+            webView.configuration.userContentController.removeScriptMessageHandler(forName: eventName)
         }
         configuration.userContentController.removeScriptMessageHandler(forName: ttsHandlerEventName)
         configuration.userContentController.removeScriptMessageHandler(forName: ttsLogEventName)
@@ -440,18 +418,7 @@ extension WebView: WKNavigationDelegate {
 }
 
 extension WebView: UIScrollViewDelegate {
-    // IFFXL
-    func viewForZooming(in: UIScrollView) -> UIView? {
-        if presentingFixedLayoutContent {
-            for view in scrollView.subviews { // For FXL tmp
-                if let classString = NSClassFromString("WKContentView"), view.isKind(of: classString) {
-                    return view
-                }
-            }// tmp end
-        }
-        return nil
-    }
-    
+
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         scrollView.isUserInteractionEnabled = true
         viewDelegate?.didEndPageAnimation()
@@ -464,6 +431,11 @@ extension WebView: UIScrollViewDelegate {
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         viewDelegate?.didEndPageAnimation()
     }
+    
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        // Do not remove: overriden in subclasses
+    }
+
 }
 
 extension WebView: WKUIDelegate {
@@ -479,7 +451,6 @@ extension WebView: WKUIDelegate {
         return true
     }
 }
-
 
 private extension UIScrollView {
     
