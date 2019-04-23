@@ -25,7 +25,7 @@ public protocol EPUBNavigatorDelegate: class {
     func didNavigateViaInternalLinkTap(to documentIndex: Int)
     func didTapExternalUrl(_ : URL)
     func didCallFromWebTTSEvent(with model: TTSBridgeModel)
-
+    
     /// Displays an error message to the user.
     func presentError(_ error: NavigatorError)
 }
@@ -63,7 +63,7 @@ open class EPUBNavigatorViewController: UIViewController {
     public let publication: Publication
     public let license: DRMLicense?
     public weak var delegate: EPUBNavigatorDelegate?
-
+    
     public let pageTransition: PageTransition
     public let disableDragAndDrop: Bool
     
@@ -128,10 +128,10 @@ open class EPUBNavigatorViewController: UIViewController {
             let linkList = self.getTableOfContents()
             return fulfill(linkList: linkList)
         } ()
-
+        
         func fulfill(linkList: [Link]) -> [String: String] {
             var result = [String: String]()
-
+            
             for link in linkList {
                 if let title = link.title {
                     result[link.href] = title
@@ -143,7 +143,7 @@ open class EPUBNavigatorViewController: UIViewController {
             }
             return result
         }
-
+        
         let progression = triptychView.getCurrentDocumentProgression()
         let index = triptychView.getCurrentDocumentIndex()
         let readingOrder = self.getReadingOrder()[index]
@@ -177,12 +177,9 @@ open class EPUBNavigatorViewController: UIViewController {
         super.viewWillDisappear(animated)
         
         // Save the currently opened document index and progression.
-        if navigationController == nil {
-            let progression = triptychView.getCurrentDocumentProgression()
-            let index = triptychView.getCurrentDocumentIndex()
-            
-            delegate?.willExitPublication(documentIndex: index, progression: progression)
-        }
+        let progression = triptychView.getCurrentDocumentProgression()
+        let index = triptychView.getCurrentDocumentIndex()
+        delegate?.willExitPublication(documentIndex: index, progression: progression)
     }
 }
 
@@ -229,7 +226,7 @@ extension EPUBNavigatorViewController {
         guard let href = components.first else {
             return nil
         }
-        guard let index = publication.readingOrder.index(where: { $0.href?.contains(href) ?? false }) else {
+        guard let index = publication.readingOrder.index(where: { $0.href.contains(href) }) else {
             return nil
         }
         // If any id found, set the scroll position to it, else to the
@@ -242,22 +239,22 @@ extension EPUBNavigatorViewController {
         }
         return index
     }
-
+    
     public func getReadingOrder() -> [Link] {
         return publication.readingOrder
     }
-
+    
     public func getTableOfContents() -> [Link] {
         return publication.tableOfContents
     }
-
+    
     public func updateUserSettingStyle() {
         guard let views = triptychView.views?.array else {
             return
         }
         for view in views {
             let webview = view as? WebView
-
+            
             webview?.applyUserSettingsStyle()
         }
     }
@@ -293,24 +290,24 @@ extension EPUBNavigatorViewController: WebViewDelegate {
         let delta = triptychView.readingProgression == .rtl ? -1:1
         self.displayReadingOrderItem(at: self.triptychView.index + delta)
     }
-
+    
     /// Display previous document (readingOrder item).
     public func displayLeftDocument() {
         let delta = triptychView.readingProgression == .rtl ? -1:1
         self.displayReadingOrderItem(at: self.triptychView.index - delta)
     }
-
+    
     /// Returns the currently presented Publication's identifier.
     ///
     /// - Returns: The publication identifier.
     public func publicationIdentifier() -> String? {
         return publication.metadata.identifier
     }
-
+    
     public func publicationBaseUrl() -> URL? {
-        return publication.baseUrl
+        return publication.baseURL
     }
-
+    
     internal func handleCenterTap() {
         delegate?.middleTapHandler()
     }
@@ -326,21 +323,14 @@ extension EPUBNavigatorViewController: EditingActionsControllerDelegate {
     func didCallFromWebTTSEvent(with model: TTSBridgeModel) {
         delegate?.didCallFromWebTTSEvent(with: model)
    }
-
-    func requestCopySelection() -> Bool {
-        let allowed = license?.canCopy ?? true
-        if !allowed {
-            delegate?.presentError(.copyForbidden)
-        }
-        return allowed
-    }
     
 }
 
 extension EPUBNavigatorViewController {
     
     public func isReadyToTTS(completion: ((Bool) -> Void)?) {
-        (triptychView.currentView as? WebView)?.evaluateJavaScript("tts_result_json;") { (result, error) in
+        (triptychView.currentView as? WebView)?.webView
+            .evaluateJavaScript("tts_result_json;") { (result, error) in
             guard let _ = result as? [Any] else {
                 completion?(false)
                 return
@@ -350,25 +340,29 @@ extension EPUBNavigatorViewController {
     }
     
     public func readyToTTS(with isAutoPage: Bool, completion: TTSBridgeModelDefaultHandler?) {
-        (triptychView.currentView as? WebView)?.evaluateJavaScript("tts_ready(\(isAutoPage));", completionHandler: { (_, _) in
+        (triptychView.currentView as? WebView)?.webView
+            .evaluateJavaScript("tts_ready(\(isAutoPage));", completionHandler: { (_, _) in
             completion?()
         })
     }
     
     public func executeTTS(index: Int, completion: TTSBridgeModelDefaultHandler?) {
-        (triptychView.currentView as? WebView)?.evaluateJavaScript("call_from_native_tts_page(\(index));", completionHandler: { (_, _) in
+        (triptychView.currentView as? WebView)?.webView
+            .evaluateJavaScript("call_from_native_tts_page(\(index));", completionHandler: { (_, _) in
             completion?()
         })
     }
     
     public func stopTTS(completion: TTSBridgeModelDefaultHandler?) {
-        (triptychView.currentView as? WebView)?.evaluateJavaScript("call_from_native_reset();") { (_, _) in
+        (triptychView.currentView as? WebView)?.webView
+            .evaluateJavaScript("call_from_native_reset();") { (_, _) in
             completion?()
         }
     }
     
     public func removeAllHighlight(completion: TTSBridgeModelDefaultHandler?) {
-        (triptychView.currentView as? WebView)?.evaluateJavaScript("ADDON_IPAPRIKA.JS.remove_TTS_All_Highlight();") { (_, _) in
+        (triptychView.currentView as? WebView)?.webView
+            .evaluateJavaScript("ADDON_IPAPRIKA.JS.remove_TTS_All_Highlight();") { (_, _) in
             completion?()
         }
     }
@@ -397,7 +391,7 @@ extension Delegatee: TriptychViewDelegate {
             editingActions: parent.editingActions,
             contentInset: parent.contentInset
         )
-
+        
         if let url = parent.publication.url(to: link) {
             let urlRequest = URLRequest(url: url)
             

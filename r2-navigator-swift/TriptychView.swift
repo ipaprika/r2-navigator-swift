@@ -122,7 +122,7 @@
         self.viewCount = viewCount
         self.readingProgression = readingProgression
         self.scrollView = UIScrollView()
-
+        
         if self.readingProgression == .rtl {
             leading = .right; trailing = .left
         } else {

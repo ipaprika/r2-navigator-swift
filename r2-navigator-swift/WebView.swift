@@ -24,7 +24,7 @@ protocol WebViewDelegate: class {
     func publicationBaseUrl() -> URL?
     func handleTapOnLink(with url: URL)
     func handleTapOnInternalLink(with href: String)
-    func documentPageDidChanged(webview: WebView, currentPage: Int ,totalPage: Int)
+    func documentPageDidChange(webView: WebView, currentPage: Int ,totalPage: Int)
     func didCallFromWebTTSEvent(with model: TTSBridgeModel)
 
 }
@@ -55,8 +55,7 @@ class WebView: UIView, Loggable {
         return Int(progression! * Double(totalPages!)) + 1
     }
     
-    private var ttsModel: TTSBridgeModel?
-    internal var userSettings: UserSettings? {
+    var userSettings: UserSettings? {
         didSet {
             guard let userSettings = userSettings else { return }
             updateActivityIndicator(for: userSettings)
@@ -75,34 +74,35 @@ class WebView: UIView, Loggable {
             "didLoad": documentDidLoad,
             "updateProgression": progressionDidChange
         ]
-
-    let ttsHandlerEventName = "ttsHandler"
-    let ttsLogEventName = "ttsLog"
     }
+    
+    private var ttsModel: TTSBridgeModel?
+    private let ttsHandlerEventName = "ttsHandler"
+    private let ttsLogEventName = "ttsLog"
     
     var sizeObservation: NSKeyValueObservation?
 
     required init(initialLocation: BinaryLocation, readingProgression: ReadingProgression, pageTransition: PageTransition = .none, disableDragAndDrop: Bool = false, editingActions: EditingActionsController, contentInset: [UIUserInterfaceSizeClass: EPUBContentInsets]) {
-
+        
         self.initialLocation = initialLocation
         self.readingProgression = readingProgression
         self.pageTransition = pageTransition
         self.editingActions = editingActions
         self.webView = WKWebView(frame: .zero, configuration: .init())
         self.contentInset = contentInset
-      
+        
         super.init(frame: .zero)
         
         webView.frame = bounds
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(webView)
-
+        
         if disableDragAndDrop { disableDragAndDropInteraction() }
         isOpaque = false
         backgroundColor = UIColor.clear
         
         setupWebView()
-
+        
         sizeObservation = scrollView.observe(\.contentSize, options: .new) { [weak self] scrollView, value in
             guard let self = self else {
                 return
@@ -130,7 +130,7 @@ class WebView: UIView, Loggable {
         scrollView.backgroundColor = UIColor.clear
         
         webView.allowsBackForwardNavigationGestures = false
-
+        
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
         
@@ -138,7 +138,7 @@ class WebView: UIView, Loggable {
             // Prevents the pages from jumping down when the status bar is toggled
             scrollView.contentInsetAdjustmentBehavior = .never
         }
-
+        
         webView.navigationDelegate = self
         webView.uiDelegate = self
         scrollView.delegate = self
@@ -170,7 +170,7 @@ class WebView: UIView, Loggable {
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         return super.canPerformAction(action, withSender: sender) && editingActions.canPerformAction(action)
     }
-
+    
     override func copy(_ sender: Any?) {
         guard editingActions.requestCopy() else {
             return
@@ -192,7 +192,7 @@ class WebView: UIView, Loggable {
         scrollTo(.left)
         dismissIfNeeded()
     }
-
+    
     /// Called from the JS code when a tap is detected in the 2/10 right part of the screen.
     private func rightTapped(body: Any) {
         // Disables left/right taps when the document is zoomed in.
@@ -202,7 +202,7 @@ class WebView: UIView, Loggable {
         scrollTo(.right)
         dismissIfNeeded()
     }
-
+    
     /// Called from the JS code when a tap is detected in the 6/10 center
     /// part of the screen.
     ///
@@ -211,7 +211,7 @@ class WebView: UIView, Loggable {
         viewDelegate?.handleCenterTap()
         dismissIfNeeded()
     }
-
+    
     /// Called by the javascript code to notify on DocumentReady.
     ///
     /// - Parameter body: Unused.
@@ -238,13 +238,13 @@ class WebView: UIView, Loggable {
         webView.evaluateJavaScript("scrollToPosition(\'\(position)\', \'\(dir)\')",
             completionHandler: nil)
     }
-
+    
     // Scroll at the tag with id `tagId`.
     func scrollAt(tagId: String) {
         webView.evaluateJavaScript("scrollToId(\'\(tagId)\');",
             completionHandler: nil)
     }
-
+    
     // Scroll to .beggining or .end.
     func scrollAt(location: BinaryLocation) {
         switch location {
@@ -254,7 +254,7 @@ class WebView: UIView, Loggable {
             scrollAt(position: 1)
         }
     }
-
+    
     /// Moves the webView to the initial location.
     func scrollToInitialPosition() {
         /// If the savedProgression property has been set by the navigator.
@@ -307,7 +307,7 @@ class WebView: UIView, Loggable {
             }
         }
     }
-
+    
     // Called by the javascript code to notify that scrolling ended.
     private func progressionDidChange(body: Any) {
         guard documentLoaded, let bodyString = body as? String, let newProgression = Double(bodyString) else {
@@ -315,7 +315,7 @@ class WebView: UIView, Loggable {
         }
         
         let originPage = self.currentPage()
-
+        
         progression = newProgression
         
         let currentPage = self.currentPage()
@@ -357,9 +357,7 @@ extension WebView: WKScriptMessageHandler {
                                didReceive message: WKScriptMessage) {
         if let handler = jsEvents[message.name],
             let value = message.body as? String {
-            handler(self)(value)
-        } else if let followup = jsFollowUp[message.name] {
-            followup(self)()
+            handler(value)
         } else if let infoValue = message.body as? [String: Any], message.name == ttsHandlerEventName {
             onTTSHandler(json: infoValue)
         } else if let value = message.body as? String, message.name == ttsLogEventName {
@@ -374,8 +372,8 @@ extension WebView: WKScriptMessageHandler {
         for eventName in jsEvents.keys {
             webView.configuration.userContentController.add(self, name: eventName)
         }
-        configuration.userContentController.add(self, name: ttsHandlerEventName)
-        configuration.userContentController.add(self, name: ttsLogEventName)
+        webView.configuration.userContentController.add(self, name: ttsHandlerEventName)
+        webView.configuration.userContentController.add(self, name: ttsLogEventName)
         hasLoadedJsEvents = true
     }
 
@@ -384,8 +382,8 @@ extension WebView: WKScriptMessageHandler {
         for eventName in jsEvents.keys {
             webView.configuration.userContentController.removeScriptMessageHandler(forName: eventName)
         }
-        configuration.userContentController.removeScriptMessageHandler(forName: ttsHandlerEventName)
-        configuration.userContentController.removeScriptMessageHandler(forName: ttsLogEventName)
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: ttsHandlerEventName)
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: ttsLogEventName)
         hasLoadedJsEvents = false
     }
 }
@@ -395,13 +393,13 @@ extension WebView: WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         let navigationType = navigationAction.navigationType
-
+        
         if navigationType == .linkActivated {
             if let url = navigationAction.request.url {
                 // TO/DO add URL normalisation.
                 //check url if internal or external
                 let publicationBaseUrl = viewDelegate?.publicationBaseUrl()
-
+                
                 if url.host == publicationBaseUrl?.host,
                     let baseUrlString = publicationBaseUrl?.absoluteString {
                     // Internal link.
@@ -412,7 +410,7 @@ extension WebView: WKNavigationDelegate {
                 }
             }
         }
-
+        
         decisionHandler(navigationType == .other ? .allow : .cancel)
     }
 }
@@ -501,9 +499,9 @@ private extension WebView {
     func createActivityIndicator(style: UIActivityIndicatorView.Style) {
         if pageTransition == .none { return }
         if documentLoaded { return }
-      if activityIndicatorView?.style == style { return }
+        if activityIndicatorView?.style == style { return }
         activityIndicatorView?.removeFromSuperview()
-      let view = UIActivityIndicatorView(style: style)
+        let view = UIActivityIndicatorView(style: style)
         view.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(view)
         view.centerXAnchor.constraint(equalTo: self.centerXAnchor).isActive = true

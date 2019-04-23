@@ -13,7 +13,6 @@ import Foundation
 import UIKit
 import R2Shared
 
-
 public enum EditingAction: String {
     case copy = "copy:"
     case share = "_share:"

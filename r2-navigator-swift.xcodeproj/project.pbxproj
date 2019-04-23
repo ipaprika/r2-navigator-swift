@@ -7,10 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		03C3CC68222DBD8600A01731 /* R2Shared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03C3CC67222DBD8600A01731 /* R2Shared.framework */; };
 		1D3A2F56218C85A100108B31 /* PageTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3A2F55218C85A100108B31 /* PageTransition.swift */; };
 		C33F793A2199C5E300123A74 /* R2Shared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C33F79392199C5E300123A74 /* R2Shared.framework */; };
-		C34D803221B42A2900CB5F48 /* TTSBridgeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34D803121B42A2900CB5F48 /* TTSBridgeModel.swift */; };
+		C3A249F5226F547B008F6454 /* TTSBridgeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A249F4226F547B008F6454 /* TTSBridgeModel.swift */; };
 		CA0B3AC3222EE555006D9363 /* PDFNavigatorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0B3AC2222EE555006D9363 /* PDFNavigatorViewController.swift */; };
 		CA479DC3226493570053445E /* UIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA479DC2226493570053445E /* UIView.swift */; };
 		CA479DC52264AEA20053445E /* UIColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA479DC42264AEA20053445E /* UIColor.swift */; };
@@ -30,10 +29,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		03C3CC67222DBD8600A01731 /* R2Shared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = R2Shared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D3A2F55218C85A100108B31 /* PageTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageTransition.swift; sourceTree = "<group>"; };
 		C33F79392199C5E300123A74 /* R2Shared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = R2Shared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		C34D803121B42A2900CB5F48 /* TTSBridgeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSBridgeModel.swift; sourceTree = "<group>"; };
+		C3A249F4226F547B008F6454 /* TTSBridgeModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TTSBridgeModel.swift; sourceTree = "<group>"; };
 		C3EB74ED21986A3B008D0242 /* ObjectMapper.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ObjectMapper.framework; path = Carthage/Build/iOS/ObjectMapper.framework; sourceTree = "<group>"; };
 		CA0B3AC2222EE555006D9363 /* PDFNavigatorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFNavigatorViewController.swift; sourceTree = "<group>"; };
 		CA479DC2226493570053445E /* UIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIView.swift; sourceTree = "<group>"; };
@@ -112,6 +110,7 @@
 				F3E7D3C71F4D83B000DF166D /* Info.plist */,
 				CAB9086A22492D4C00711C3F /* Navigator.swift */,
 				CACE84FA2254BFEE00E19E8B /* EditingAction.swift */,
+				C3A249F4226F547B008F6454 /* TTSBridgeModel.swift */,
 				CA479DC1226493390053445E /* Toolkit */,
 				CA0B3AC1222EE530006D9363 /* PDF */,
 				F3E7D42C1F4EE0DB00DF166D /* CBZ */,
@@ -157,7 +156,7 @@
 		F3E7D42C1F4EE0DB00DF166D /* CBZ */ = {
 			isa = PBXGroup;
 			children = (
-				F3E7D42D1F4EE0FE00DF166D /* CbzNavigatorViewController.swift */,
+				F3E7D42D1F4EE0FE00DF166D /* CBZNavigatorViewController.swift */,
 			);
 			name = CBZ;
 			sourceTree = "<group>";
@@ -217,6 +216,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 			);
 			mainGroup = F3E7D3B91F4D83B000DF166D;
@@ -277,6 +277,7 @@
 				CACE84F82254BE5F00E19E8B /* PDFDocumentView.swift in Sources */,
 				F3E7D3E41F4D84DC00DF166D /* TriptychView.swift in Sources */,
 				CACE8521225CDFB000E19E8B /* ReflowableWebView.swift in Sources */,
+				C3A249F5226F547B008F6454 /* TTSBridgeModel.swift in Sources */,
 				1D3A2F56218C85A100108B31 /* PageTransition.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
