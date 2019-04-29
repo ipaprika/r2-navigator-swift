@@ -183,7 +183,6 @@
 				F3E7D3BF1F4D83B000DF166D /* Frameworks */,
 				F3E7D3C01F4D83B000DF166D /* Headers */,
 				F3E7D3C11F4D83B000DF166D /* Resources */,
-				C3973D4121986DCA007F51BE /* Carthage Run Script */,
 			);
 			buildRules = (
 			);
@@ -238,24 +237,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		C3973D4121986DCA007F51BE /* Carthage Run Script */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/Carthage/Build/iOS/ObjectMapper.framework",
-			);
-			name = "Carthage Run Script";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "/usr/local/bin/carthage copy-frameworks\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		F3E7D3BE1F4D83B000DF166D /* Sources */ = {
