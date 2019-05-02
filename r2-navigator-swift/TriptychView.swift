@@ -304,6 +304,26 @@
             if $0.superview == nil { $0.removeMessageHandlers() }
         }
     }
+ 
+    private func resetAllSubviews() {
+        scrollView.subviews
+            .compactMap { $0 as? WebView }
+            .forEach {
+                $0.removeMessageHandlers()
+                $0.removeFromSuperview()
+        }
+        views?.array.compactMap { $0 as? WebView }
+            .forEach {
+                $0.removeMessageHandlers()
+                $0.removeFromSuperview()
+        }
+     
+        updateViews()
+        syncSubviews()
+        setNeedsLayout()
+        layoutIfNeeded()
+    }
+  
  }
  
  extension TriptychView {
@@ -311,10 +331,14 @@
     ///
     /// - Parameters:
     ///   - nextIndex: The index to move to.
-    internal func moveTo(index nextIndex: Int, id: String? = nil) {
+    internal func moveTo(index nextIndex: Int, id: String? = nil, force: Bool = false) {
+        if force {
+            resetAllSubviews()
+        }
+     
         var cw = currentView as! WebView
         
-        guard index != nextIndex else {
+        guard index != nextIndex || force else {
             if let id = id {
                 if id == "" {
                     cw.scrollAt(location: leading)
