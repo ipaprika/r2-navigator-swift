@@ -188,12 +188,12 @@ extension EPUBNavigatorViewController {
     /// Display the readingOrder item at `index`.
     ///
     /// - Parameter index: The index of the readingOrder item to display.
-    public func displayReadingOrderItem(at index: Int) {
+    public func displayReadingOrderItem(at index: Int, force: Bool = false) {
         guard publication.readingOrder.indices.contains(index) else {
             return
         }
         performTriptychViewTransition {
-            self.triptychView.moveTo(index: index)
+            self.triptychView.moveTo(index: index, force: force)
         }
     }
     
